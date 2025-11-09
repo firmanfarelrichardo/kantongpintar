@@ -1,11 +1,11 @@
 // lib/pages/account/account_page.dart
-// (100% Siap Pakai - Menambahkan tombol Kelola Kategori)
+// (100% Siap Pakai - FIX Error 'heightFactor')
 
 import 'package:flutter/material.dart';
 import 'package:testflutter/models/account.dart';
 import 'package:testflutter/services/account_repository.dart';
 import 'package:testflutter/pages/account/account_form_modal.dart';
-import 'package:testflutter/pages/category/category_management_modal.dart'; // BARU
+import 'package:testflutter/pages/category/category_management_modal.dart';
 import '../../main.dart'; // Untuk konstanta warna
 
 class AccountPage extends StatefulWidget {
@@ -51,28 +51,31 @@ class _AccountPageState extends State<AccountPage> {
 
   // === 4. Modal Helpers ===
   
-  /// Menampilkan modal untuk menambah akun baru
   void _showAddAccountModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
         return AccountFormModal(
-          onSaveSuccess: _loadData, // Callback untuk me-refresh halaman ini
+          onSaveSuccess: _loadData,
         );
       },
     );
   }
   
-  /// BARU: Menampilkan modal untuk mengelola kategori
+  /// (FIXED) Menampilkan modal untuk mengelola kategori
   void _showCategoryManagementModal() {
      showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      // Gunakan 90% tinggi layar
-      heightFactor: 0.9,
+      // heightFactor: 0.9, // <-- INI YANG ERROR
       builder: (ctx) {
-        return const CategoryManagementModal();
+        // === SOLUSI: Bungkus modal dengan FractionallySizedBox ===
+        return FractionallySizedBox(
+          heightFactor: 0.9, // <-- Parameter dipindah ke sini
+          child: const CategoryManagementModal(),
+        );
+        // =======================================================
       },
     );
   }
@@ -114,7 +117,6 @@ class _AccountPageState extends State<AccountPage> {
             header,
             const SizedBox(height: 20),
             
-            // === Bagian Akun Dinamis ===
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
@@ -131,7 +133,6 @@ class _AccountPageState extends State<AccountPage> {
             
             const Divider(height: 30, indent: 16, endIndent: 16),
             
-            // === Bagian Opsi Statis (DIUPDATE) ===
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
@@ -140,7 +141,6 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ),
             
-            // BARU: Tombol Kelola Kategori
             _buildStaticOption(
               'Kelola Kategori', 
               Icons.category,
@@ -151,7 +151,7 @@ class _AccountPageState extends State<AccountPage> {
             _buildStaticOption('Keamanan', Icons.lock_outline),
             _buildStaticOption('Keluar', Icons.logout, isDestructive: true),
             
-            const SizedBox(height: 80), // Padding untuk Bottom Nav
+            const SizedBox(height: 80),
           ],
         ),
       ),
@@ -161,7 +161,6 @@ class _AccountPageState extends State<AccountPage> {
   // === 6. Helper Widgets ===
 
   Widget _buildAccountSection() {
-    // ... (Kode sama persis seperti langkah sebelumnya)
     return Column(
       children: [
         if (_accounts.isNotEmpty)
@@ -182,7 +181,6 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Widget _buildAccountTile(Account account) {
-    // ... (Kode sama persis seperti langkah sebelumnya)
      return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
       child: Container(
@@ -213,7 +211,6 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Widget _buildStaticOption(String title, IconData icon, {bool isDestructive = false, VoidCallback? onTap, bool isAddNew = false}) {
-    // ... (Kode sama persis seperti langkah sebelumnya)
     final color = isDestructive ? kDangerColor : (isAddNew ? Colors.deepPurple : kTextColor);
     
     return Padding(
@@ -237,7 +234,10 @@ class _AccountPageState extends State<AccountPage> {
             title, 
             style: TextStyle(color: color, fontWeight: isAddNew ? FontWeight.bold : FontWeight.w500),
           ),
-          trailing: (isDestructive || isAddNew || (onTap != null)) ? null : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          // Logika trailing icon diupdate agar lebih rapi
+          trailing: (isDestructive || isAddNew) 
+              ? null 
+              : Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[600]),
           onTap: onTap ?? () {},
         ),
       ),
