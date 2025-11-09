@@ -35,6 +35,11 @@ dependencies:
   intl: ^0.20.2
   fl_chart: ^0.68.0
 
+  # BARU: Untuk Database
+  sqflite: ^2.3.3+1    # Package utama SQLite
+  path_provider: ^2.1.3 # Untuk mencari path direktori
+  path: ^1.9.0        # Untuk menggabungkan path
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
