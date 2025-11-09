@@ -1,19 +1,17 @@
 // lib/pages/transaction/transaction_form_modal.dart
-// (100% Siap Pakai - Menggantikan file lama)
+// (100% Siap Pakai - VERSI BARU dengan Kategori)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:testflutter/models/account.dart';
+import 'package:testflutter/models/category.dart'; // BARU
 import 'package:testflutter/services/account_repository.dart';
+import 'package:testflutter/services/category_repository.dart'; // BARU
 import 'package:testflutter/services/transaction_repository.dart';
-import 'package:testflutter/models/transaction.dart' as model; // Ubah nama import
+import 'package:testflutter/models/transaction.dart' as model;
 
-/// Modal untuk membuat transaksi baru.
-/// Direfactor total untuk menggunakan Repository dan Database SQLite.
 class TransactionFormModal extends StatefulWidget {
-  /// Callback yang akan dipanggil setelah transaksi berhasil disimpan,
-  /// untuk memberi sinyal ke HomePage agar me-refresh datanya.
   final VoidCallback onSaveSuccess;
 
   const TransactionFormModal({
@@ -28,49 +26,72 @@ class TransactionFormModal extends StatefulWidget {
 class _TransactionFormModalState extends State<TransactionFormModal> {
   final _formKey = GlobalKey<FormState>();
   
-  // === 1. Akses ke "Departemen" Data ===
+  // === 1. Repositories ===
   final TransactionRepository _transactionRepo = TransactionRepository();
   final AccountRepository _accountRepo = AccountRepository();
+  final CategoryRepository _categoryRepo = CategoryRepository(); // BARU
 
   // === 2. Controller & State Form ===
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  String _selectedType = 'expense'; // Tipe transaksi: 'expense' atau 'income'
+  String _selectedType = 'expense';
   DateTime _selectedDate = DateTime.now();
-  String? _selectedAccountId; // ID Akun yang dipilih
+  String? _selectedAccountId;
+  String? _selectedCategoryId; // BARU
 
   // === 3. State untuk UI ===
-  bool _isLoadingAccounts = true;
+  bool _isLoading = true; // Satu state loading gabungan
   bool _isSaving = false;
+  
+  // Daftar data untuk dropdown
   List<Account> _accounts = [];
+  List<Category> _expenseCategories = []; // BARU
+  List<Category> _incomeCategories = []; // BARU
 
   @override
   void initState() {
     super.initState();
-    // Saat modal dibuka, segera muat daftar akun
-    _loadAccounts();
+    // Muat semua data yang diperlukan untuk form
+    _loadFormData();
   }
 
-  /// Memuat daftar akun dari database untuk ditampilkan di Dropdown
-  Future<void> _loadAccounts() async {
+  /// Memuat semua data (Akun & Kategori) secara paralel
+  Future<void> _loadFormData() async {
+    setState(() { _isLoading = true; });
     try {
-      final accounts = await _accountRepo.getAllAccounts();
-      setState(() {
-        _accounts = accounts;
-        // Jika ada akun, pilih akun pertama sebagai default
-        if (_accounts.isNotEmpty) {
-          _selectedAccountId = _accounts.first.id;
-        }
-        _isLoadingAccounts = false;
-      });
+      // Ambil semua data sekaligus
+      final results = await Future.wait([
+        _accountRepo.getAllAccounts(),
+        _categoryRepo.getCategoriesByType('expense'),
+        _categoryRepo.getCategoriesByType('income'),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _accounts = results[0] as List<Account>;
+          _expenseCategories = results[1] as List<Category>;
+          _incomeCategories = results[2] as List<Category>;
+
+          // Set default Akun
+          if (_accounts.isNotEmpty) {
+            _selectedAccountId = _accounts.first.id;
+          }
+          // Set default Kategori (berdasarkan tipe default 'expense')
+          if (_expenseCategories.isNotEmpty) {
+            _selectedCategoryId = _expenseCategories.first.id;
+          }
+
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoadingAccounts = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memuat daftar akun: $e')),
-      );
+      if (mounted) {
+        setState(() { _isLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat data form: $e')),
+        );
+      }
     }
   }
 
@@ -83,51 +104,43 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
 
   /// Fungsi utama untuk menyimpan data ke database
   Future<void> _submitForm() async {
-    // 1. Validasi form
-    if (!_formKey.currentState!.validate()) {
-      return; // Jika form tidak valid, hentikan
-    }
+    if (!_formKey.currentState!.validate()) return;
     
-    // 2. Validasi tambahan
     if (_selectedAccountId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Anda harus memilih satu akun.')),
       );
       return;
     }
+    
+    if (_selectedCategoryId == null) {
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Anda harus memilih kategori.')),
+      );
+      return;
+    }
 
-    setState(() {
-      _isSaving = true; // Tampilkan loading di tombol
-    });
+    setState(() { _isSaving = true; });
 
     try {
-      // 3. Buat object Transaction baru
       final now = DateTime.now();
       final newTransaction = model.Transaction(
-        // Buat ID unik berdasarkan timestamp
         id: now.millisecondsSinceEpoch.toString(),
-        // Ambil data dari form
         accountId: _selectedAccountId!,
         amount: double.parse(_amountController.text.replaceAll('.', '')),
         type: _selectedType,
         description: _descriptionController.text,
         transactionDate: _selectedDate,
-        // Set timestamp untuk pelacakan
+        categoryId: _selectedCategoryId, // <-- BARU DISIMPAN
         createdAt: now,
         updatedAt: now,
-        // Properti opsional lainnya bisa null
-        categoryId: null, 
         pocketId: null,
         transferGroupId: null,
       );
 
-      // 4. Simpan ke Database SQLite
       await _transactionRepo.createTransaction(newTransaction);
-
-      // 5. Beri tahu HomePage untuk refresh
       widget.onSaveSuccess();
 
-      // 6. Tutup modal
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -135,23 +148,18 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
         );
       }
     } catch (e) {
-      // Error handling
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal menyimpan transaksi: $e')),
         );
       }
     } finally {
-      // Hentikan loading di tombol
       if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
+        setState(() { _isSaving = false; });
       }
     }
   }
   
-  // Helper untuk memilih tanggal
   void _presentDatePicker() async {
     final pickedDate = await showDatePicker(
       context: context,
@@ -160,16 +168,21 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
       lastDate: DateTime.now(),
     );
     if (pickedDate != null) {
-      setState(() {
-        _selectedDate = pickedDate;
-      });
+      setState(() { _selectedDate = pickedDate; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Padding agar keyboard tidak menutupi form
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+
+    // Jika masih loading, tampilkan spinner
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(40.0),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return SingleChildScrollView(
       child: Padding(
@@ -195,8 +208,12 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
               ),
               const SizedBox(height: 20),
               
-              // === Dropdown Akun (BARU) ===
+              // === Dropdown Akun ===
               _buildAccountDropdown(),
+              const SizedBox(height: 16),
+
+              // === BARU: Dropdown Kategori ===
+              _buildCategoryDropdown(),
               const SizedBox(height: 10),
 
               // === Pilih Tanggal ===
@@ -246,10 +263,9 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
               // === Tombol Simpan ===
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple, // Sesuaikan tema
+                  backgroundColor: Colors.deepPurple,
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-                // Nonaktifkan tombol saat sedang menyimpan
                 onPressed: _isSaving ? null : _submitForm,
                 child: _isSaving
                     ? const SizedBox(
@@ -271,15 +287,11 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
 
   // Helper widget untuk dropdown akun
   Widget _buildAccountDropdown() {
-    if (_isLoadingAccounts) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     if (_accounts.isEmpty) {
       return const InputDecorator(
         decoration: InputDecoration(
           labelText: 'Akun',
-          errorText: 'Buat akun di halaman Home terlebih dahulu!',
+          errorText: 'Buat akun di halaman Akun terlebih dahulu!',
         ),
       );
     }
@@ -298,12 +310,52 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
     );
   }
 
+  // === BARU: Helper widget untuk dropdown kategori ===
+  Widget _buildCategoryDropdown() {
+    // Tentukan list mana yang akan dipakai
+    final currentList = _selectedType == 'expense' ? _expenseCategories : _incomeCategories;
+
+    if (currentList.isEmpty) {
+      return InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Kategori',
+          errorText: 'Buat kategori $_selectedType di halaman Akun!',
+        ),
+      );
+    }
+    
+    return DropdownButtonFormField<String>(
+      decoration: const InputDecoration(labelText: 'Pilih Kategori'),
+      value: _selectedCategoryId,
+      items: currentList.map((category) {
+        return DropdownMenuItem(
+          value: category.id,
+          child: Text(category.name),
+        );
+      }).toList(),
+      onChanged: (newValue) => setState(() => _selectedCategoryId = newValue),
+      validator: (value) => value == null ? 'Pilih kategori.' : null,
+    );
+  }
+
   // Helper widget untuk toggle tipe
   Widget _buildTypeToggle(String label, String type, Color color) {
     final bool isSelected = _selectedType == type;
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _selectedType = type),
+        onTap: () {
+          setState(() {
+            _selectedType = type;
+            // PENTING: Reset pilihan kategori saat tipe berubah
+            if (_selectedType == 'expense' && _expenseCategories.isNotEmpty) {
+              _selectedCategoryId = _expenseCategories.first.id;
+            } else if (_selectedType == 'income' && _incomeCategories.isNotEmpty) {
+              _selectedCategoryId = _incomeCategories.first.id;
+            } else {
+              _selectedCategoryId = null; // Kosongkan jika tidak ada kategori
+            }
+          });
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(

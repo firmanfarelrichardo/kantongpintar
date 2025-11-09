@@ -1,6 +1,5 @@
 // lib/services/transaction_repository.dart
-// (100% Siap Pakai)
-// Ini adalah pengganti profesional untuk transaction_service.dart
+// (100% Siap Pakai - Menambahkan fungsi agregasi)
 
 import 'package:sqflite/sqflite.dart';
 import 'database_service.dart';
@@ -8,52 +7,42 @@ import '../models/transaction.dart'; // Model yang baru kita buat
 
 /// Repository untuk mengelola operasi CRUD (Create, Read, Update, Delete)
 /// untuk entitas Transaksi.
-/// Ini adalah "Departemen Transaksi" yang hanya berbicara dengan
-/// "Juru Kunci Brankas" (DatabaseService).
 class TransactionRepository {
   final DatabaseService _dbService = DatabaseService();
 
-  /// NAMA TABEL: Didefinisikan sebagai konstanta
-  /// (Clean Code: Reusabilitas + Konsistensi)
   static const String _tableName = 'Transactions';
 
   // === CREATE ===
-  /// Menyimpan transaksi baru ke database lokal (SQLite).
   Future<void> createTransaction(Transaction transaction) async {
     final db = await _dbService.database;
     try {
       await db.insert(
         _tableName,
-        transaction.toMap(), // Menggunakan model 'toMap'
+        transaction.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } catch (e) {
-      // Implementasi error handling profesional
       print('Error createTransaction: $e');
-      rethrow; // Lemparkan error agar UI bisa menangani
+      rethrow;
     }
   }
 
-  // === READ (Contoh: Ambil semua transaksi) ===
-  /// Mengambil semua transaksi dari database, diurutkan dari yang terbaru.
+  // === READ (Ambil semua) ===
   Future<List<Transaction>> getAllTransactions() async {
     final db = await _dbService.database;
     try {
       final List<Map<String, dynamic>> maps = await db.query(
         _tableName,
-        orderBy: 'transaction_date DESC', // Urutkan berdasarkan tanggal
+        orderBy: 'transaction_date DESC',
       );
-
-      // Ubah List<Map> menjadi List<Transaction> menggunakan model 'fromMap'
       return List.generate(maps.length, (i) => Transaction.fromMap(maps[i]));
     } catch (e) {
       print('Error getAllTransactions: $e');
-      return []; // Kembalikan list kosong jika error
+      return [];
     }
   }
   
-  // === READ (Contoh: Ambil transaksi berdasarkan Akun) ===
-  /// Mengambil semua transaksi untuk 'accountId' tertentu.
+  // === READ (Ambil per Akun) ===
   Future<List<Transaction>> getTransactionsForAccount(String accountId) async {
     final db = await _dbService.database;
     try {
@@ -70,8 +59,34 @@ class TransactionRepository {
     }
   }
 
+  // === BARU: READ (Agregasi Pengeluaran per Kantong) ===
+  /// Menghitung total pengeluaran untuk setiap kantong (pocket).
+  /// Mengembalikan Map<pocketId, totalSpent>
+  Future<Map<String, double>> getAggregatedExpensesByPocket() async {
+    final db = await _dbService.database;
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        _tableName,
+        columns: ['pocket_id', 'SUM(amount) as total'],
+        where: "type = 'expense' AND pocket_id IS NOT NULL",
+        groupBy: 'pocket_id',
+      );
+
+      // Ubah hasil query (List<Map>) menjadi Map<String, double>
+      final Map<String, double> expensesMap = {
+        for (var item in maps) 
+          item['pocket_id'] as String : item['total'] as double
+      };
+      
+      return expensesMap;
+
+    } catch (e) {
+      print('Error getAggregatedExpensesByPocket: $e');
+      return {}; // Kembalikan map kosong jika error
+    }
+  }
+
   // === UPDATE ===
-  /// Memperbarui data transaksi yang sudah ada di database.
   Future<void> updateTransaction(Transaction transaction) async {
     final db = await _dbService.database;
     try {
@@ -88,7 +103,6 @@ class TransactionRepository {
   }
 
   // === DELETE ===
-  /// Menghapus transaksi dari database berdasarkan ID-nya.
   Future<void> deleteTransaction(String id) async {
     final db = await _dbService.database;
     try {
