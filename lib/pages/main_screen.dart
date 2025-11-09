@@ -1,13 +1,12 @@
 // lib/pages/main_screen.dart
-// (100% Siap Pakai - Menggantikan GraphPage dengan TransactionListPage)
+// (100% Siap Pakai - Menambahkan kembali GraphPage ke 4 tab)
 
 import 'package:flutter/material.dart';
 import 'package:testflutter/pages/account/account_page.dart';
-// Hapus import GraphPage
-// import 'package:testflutter/pages/graph/graph_page.dart'; 
 import 'package:testflutter/pages/home/home_page.dart';
-// BARU: Import halaman daftar transaksi
-import 'package:testflutter/pages/transaction/transaction_list_page.dart'; 
+import 'package:testflutter/pages/transaction/transaction_list_page.dart';
+// BARU: Import halaman grafik
+import 'package:testflutter/pages/graph/graph_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -19,10 +18,11 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  // === UPDATE DAFTAR HALAMAN ===
+  // === UPDATE DAFTAR HALAMAN (4 HALAMAN) ===
   final List<Widget> _pages = [
     const HomePage(),
-    const TransactionListPage(), // Menggantikan GraphPage
+    const TransactionListPage(),
+    const GraphPage(), // Halaman Grafik ditambahkan di sini
     const AccountPage(),
   ];
 
@@ -39,7 +39,7 @@ class _MainScreenState extends State<MainScreen> {
         index: _selectedIndex,
         children: _pages,
       ),
-      // === UPDATE LABEL NAVIGASI ===
+      // === UPDATE LABEL NAVIGASI (4 TOMBOL) ===
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -47,8 +47,13 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt), // Ganti ikon
-            label: 'Transaksi', // Ganti label
+            icon: Icon(Icons.list_alt),
+            label: 'Transaksi',
+          ),
+          // BARU: Tombol navigasi untuk Grafik
+          BottomNavigationBarItem(
+            icon: Icon(Icons.pie_chart),
+            label: 'Grafik',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
@@ -57,6 +62,12 @@ class _MainScreenState extends State<MainScreen> {
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
+
+        // PENTING: Untuk 4 item, kita set properti ini
+        // agar semua label terlihat dan warnanya konsisten.
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.deepPurple, // Sesuaikan dengan tema
+        unselectedItemColor: Colors.grey,
       ),
     );
   }
