@@ -1,6 +1,7 @@
 // lib/services/database_service.dart
+// (100% Siap Pakai - FIX Error 'join' undefined)
 
-import 'package_path/path.dart';
+import 'package:path/path.dart'; // <-- SOLUSI: Impor paket 'path'
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -10,63 +11,44 @@ import 'package:path_provider/path_provider.dart';
 class DatabaseService {
   // === 1. Singleton Pattern ===
   
-  // Instance privat yang statik
   static DatabaseService? _instance;
-  
-  // Database instance privat dari sqflite
   static Database? _database;
 
-  /// Konstruktor factory untuk mengembalikan instance singleton
   factory DatabaseService() {
     _instance ??= DatabaseService._internal();
     return _instance!;
   }
 
-  /// Konstruktor privat internal
   DatabaseService._internal();
 
-  /// Getter publik untuk database.
-  /// Ini akan menginisialisasi database jika belum ada.
   Future<Database> get database async {
     if (_database != null) {
       return _database!;
     }
-    // Jika database null, kita inisialisasi
     _database = await _initDB();
     return _database!;
   }
 
   // === 2. Inisialisasi Database ===
 
-  /// Fungsi untuk menginisialisasi database.
   Future<Database> _initDB() async {
-    // Mendapatkan path direktori yang aman untuk menyimpan database
     final documentsDirectory = await getApplicationDocumentsDirectory();
+    // Fungsi 'join' sekarang dikenali karena kita sudah mengimpor 'package:path/path.dart'
     final path = join(documentsDirectory.path, 'kantong_pintar_v2.db');
 
-    // Membuka database
     return await openDatabase(
       path,
-      version: 1, // Versi database (penting untuk migrasi)
-      
-      // onConfigure: Dipanggil sebelum onCreate/onUpgrade
+      version: 1,
       onConfigure: (db) async {
-        // WAJIB: Mengaktifkan Foreign Key constraint
         await db.execute('PRAGMA foreign_keys = ON');
       },
-      
-      // onCreate: Dipanggil HANYA JIKA database belum ada di 'path'
       onCreate: _createDB,
     );
   }
 
   /// Fungsi privat untuk mengeksekusi skrip SQL saat database dibuat.
   Future<void> _createDB(Database db, int version) async {
-    // Gunakan 'batch' untuk mengeksekusi beberapa perintah SQL sekaligus
-    // Ini lebih efisien dan transaksional (jika satu gagal, semua gagal)
     final batch = db.batch();
-
-    // === MENJALANKAN SKEMA DARI TAHAP 1 ===
 
     // 1. Tabel Accounts
     batch.execute('''
@@ -80,7 +62,6 @@ class DatabaseService {
         updated_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
       );
     ''');
-    // Trigger Accounts
     batch.execute('''
       CREATE TRIGGER trg_accounts_updated_at
       AFTER UPDATE ON Accounts
@@ -106,7 +87,6 @@ class DatabaseService {
       );
     ''');
     batch.execute('CREATE INDEX idx_categories_parent ON Categories(parent_id);');
-    // Trigger Categories
     batch.execute('''
       CREATE TRIGGER trg_categories_updated_at
       AFTER UPDATE ON Categories
@@ -170,59 +150,6 @@ class DatabaseService {
       );
     ''');
 
-    // Eksekusi semua perintah SQL dalam batch
     await batch.commit(noResult: true);
   }
-
-  // === 3. CONTOH METODE CRUD (CREATE, READ, UPDATE, DELETE) ===
-  
-  // Ini adalah contoh bagaimana kita akan berinteraksi dengan tabel.
-  // Kita akan butuh model Dart (misal: 'Account') untuk ini.
-
-  /* // (Ini adalah L-angakah selanjutnya, kita buat modelnya dulu)
-
-  // CREATE: Contoh memasukkan Akun baru
-  Future<void> createAccount(Account account) async {
-    final db = await database;
-    await db.insert(
-      'Accounts',       // Nama tabel
-      account.toMap(),  // Data (diubah dari Object -> Map)
-      conflictAlgorithm: ConflictAlgorithm.replace, // Jika ID sama, timpa
-    );
-  }
-
-  // READ: Contoh mengambil semua Akun
-  Future<List<Account>> getAccounts() async {
-    final db = await database;
-    
-    // Query ke tabel 'Accounts'
-    final List<Map<String, dynamic>> maps = await db.query('Accounts');
-
-    // Ubah List<Map> menjadi List<Account>
-    return List.generate(maps.length, (i) {
-      return Account.fromMap(maps[i]);
-    });
-  }
-  
-  // UPDATE
-  Future<void> updateAccount(Account account) async {
-    final db = await database;
-    await db.update(
-      'Accounts',
-      account.toMap(),
-      where: 'id = ?',
-      whereArgs: [account.id],
-    );
-  }
-
-  // DELETE
-  Future<void> deleteAccount(String id) async {
-    final db = await database;
-    await db.delete(
-      'Accounts',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-  */
 }
