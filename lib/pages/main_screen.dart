@@ -1,16 +1,14 @@
 // lib/pages/main_screen.dart
-// (100% Siap Pakai - Menggantikan file lama)
-// Clean Code: Menghapus dependensi service lama.
+// (100% Siap Pakai - Menggantikan GraphPage dengan TransactionListPage)
 
 import 'package:flutter/material.dart';
 import 'package:testflutter/pages/account/account_page.dart';
-import 'package:testflutter/pages/graph/graph_page.dart';
+// Hapus import GraphPage
+// import 'package:testflutter/pages/graph/graph_page.dart'; 
 import 'package:testflutter/pages/home/home_page.dart';
+// BARU: Import halaman daftar transaksi
+import 'package:testflutter/pages/transaction/transaction_list_page.dart'; 
 
-/// Ini adalah widget utama yang memegang navigasi (BottomNavigationBar).
-/// Versi baru ini TIDAK LAGI membuat instance PocketService atau TransactionService,
-/// karena setiap halaman sekarang akan mengelola datanya sendiri
-/// melalui Repository.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -21,11 +19,10 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  // Halaman-halaman sekarang dipanggil langsung tanpa parameter service.
-  // Ini adalah arsitektur yang jauh lebih bersih (Loose Coupling).
+  // === UPDATE DAFTAR HALAMAN ===
   final List<Widget> _pages = [
     const HomePage(),
-    const GraphPage(),
+    const TransactionListPage(), // Menggantikan GraphPage
     const AccountPage(),
   ];
 
@@ -38,16 +35,11 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Kita memindahkan FloatingActionButton ke dalam setiap halaman (misal HomePage)
-      // agar setiap halaman bisa punya aksinya sendiri.
-      // body: _pages[_selectedIndex], 
-      
-      // Gunakan IndexedStack agar state setiap halaman (scroll position, dll)
-      // tetap terjaga saat berpindah tab.
       body: IndexedStack(
         index: _selectedIndex,
         children: _pages,
       ),
+      // === UPDATE LABEL NAVIGASI ===
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -55,12 +47,12 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart),
-            label: 'Graph',
+            icon: Icon(Icons.list_alt), // Ganti ikon
+            label: 'Transaksi', // Ganti label
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
-            label: 'Account',
+            label: 'Akun',
           ),
         ],
         currentIndex: _selectedIndex,
