@@ -1,13 +1,14 @@
 // lib/pages/home/home_page.dart
-// (100% Siap Pakai - Versi V2, Terhubung dengan Modal Baru)
+// (100% Siap Pakai - Versi V3, dengan Modal Tambah Akun)
 
 import 'package:flutter/material.dart';
 import 'package:testflutter/models/account.dart'; // Model baru
 import 'package:testflutter/models/transaction.dart'; // Model baru
 import 'package:testflutter/services/account_repository.dart'; // Repo baru
 import 'package:testflutter/services/transaction_repository.dart'; // Repo baru
-// Import modal BARU, bukan yang lama
 import 'package:testflutter/pages/transaction/transaction_form_modal.dart';
+// BARU: Import modal untuk menambah akun
+import 'package:testflutter/pages/account/account_form_modal.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -35,52 +36,39 @@ class _HomePageState extends State<HomePage> {
   }
 
   // === 4. Data Loading Function ===
-  /// Mengambil semua data dari database dan menghitung kalkulasi
   Future<void> _loadData() async {
-    // Tampilkan loading spinner
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // 1. Ambil semua data secara paralel
       final results = await Future.wait([
         _accountRepo.getAllAccounts(),
         _transactionRepo.getAllTransactions(),
       ]);
 
-      // 2. Pisahkan data
       final fetchedAccounts = results[0] as List<Account>;
       final fetchedTransactions = results[1] as List<Transaction>;
 
-      // 3. Kalkulasi Total Saldo (Fitur Utama)
       double tempTotal = 0.0;
-      
-      // Tambahkan semua saldo awal dari setiap akun
       for (final account in fetchedAccounts) {
         tempTotal += account.initialBalance;
       }
-
-      // Tambah/Kurangi berdasarkan histori transaksi
       for (final trx in fetchedTransactions) {
         if (trx.type == 'income') {
           tempTotal += trx.amount;
         } else if (trx.type == 'expense') {
           tempTotal -= trx.amount;
         }
-        // Tipe 'transfer' tidak mempengaruhi total saldo (uang hanya pindah)
       }
 
-      // 4. Update State untuk "Gambar Ulang"
       setState(() {
         _totalBalance = tempTotal;
         _accounts = fetchedAccounts;
-        // Ambil 5 transaksi terbaru untuk ditampilkan
         _recentTransactions = fetchedTransactions.take(5).toList();
         _isLoading = false;
       });
     } catch (e) {
-      // Error handling jika database gagal
       setState(() {
         _isLoading = false;
       });
@@ -90,26 +78,33 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // === 5. Helper untuk menampilkan Modal Transaksi (UPDATE DARI LANGKAH SEBELUMNYA) ===
-  /// Fungsi ini dipanggil oleh FloatingActionButton
+  // === 5. Helper untuk menampilkan Modal Transaksi ===
   void _showAddTransactionModal() {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Penting agar keyboard tidak menutupi
+      isScrollControlled: true,
       builder: (ctx) {
-        // Panggil TransactionFormModal BARU
         return TransactionFormModal(
-          // Ini adalah kuncinya:
-          // Kita 'memberikan' fungsi _loadData ke modal.
-          // Saat modal memanggil onSaveSuccess, _loadData akan dieksekusi.
-          onSaveSuccess: _loadData,
+          onSaveSuccess: _loadData, // Callback untuk refresh
         );
       },
     );
   }
 
-  // === 6. Build Method (UI) (UPDATE DARI LANGKAH SEBELUMNYA) ===
-  // Ganti seluruh method 'build' kamu dengan yang ini
+  // === 6. BARU: Helper untuk menampilkan Modal Akun ===
+  void _showAddAccountModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return AccountFormModal(
+          onSaveSuccess: _loadData, // Callback untuk refresh
+        );
+      },
+    );
+  }
+
+  // === 7. Build Method (UI) ===
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -118,35 +113,43 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadData, // Panggil ulang fungsi _loadData
+            onPressed: _loadData,
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _buildContent(),
-      
-      // FloatingActionButton sekarang memanggil helper baru kita
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddTransactionModal, // <-- DIUBAH DI SINI
+        onPressed: _showAddTransactionModal, // Tombol ini untuk Transaksi
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  // === 7. Helper Widgets untuk UI ===
+  // === 8. Helper Widgets untuk UI ===
 
   /// Widget untuk membangun konten utama (dipisah agar `build` tetap bersih)
   Widget _buildContent() {
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
-        // === Kartu Total Saldo (Tema Gen Z) ===
+        // === Kartu Total Saldo ===
         _buildTotalBalanceCard(),
         const SizedBox(height: 24),
 
-        // === Daftar Akun (Multi-Bank) ===
-        Text('Daftar Akunmu', style: Theme.of(context).textTheme.titleLarge),
+        // === Daftar Akun (DIUPDATE DENGAN TOMBOL +) ===
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Daftar Akunmu', style: Theme.of(context).textTheme.titleLarge),
+            // BARU: Tombol untuk menambah Akun
+            IconButton(
+              icon: const Icon(Icons.add_circle, color: Colors.deepPurple),
+              onPressed: _showAddAccountModal,
+            ),
+          ],
+        ),
         _buildAccountList(),
         const SizedBox(height: 24),
 
@@ -162,7 +165,7 @@ class _HomePageState extends State<HomePage> {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.deepPurple, // Tema "Gen Z"
+      color: Colors.deepPurple,
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -178,7 +181,6 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 8),
             Text(
-              // Format mata uang (akan kita perbaiki nanti)
               'Rp ${(_totalBalance).toStringAsFixed(2)}',
               style: const TextStyle(
                 color: Colors.white,
@@ -197,13 +199,12 @@ class _HomePageState extends State<HomePage> {
     if (_accounts.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 20.0),
-        child: Center(child: Text('Kamu belum punya akun. Tambahkan satu!')),
+        child: Center(child: Text('Klik tombol (+) di atas untuk menambah akun.')),
       );
     }
     
-    // Tampilkan secara horizontal agar keren
     return Container(
-      height: 100, // Tinggi kartu akun
+      height: 100,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _accounts.length,
@@ -212,13 +213,29 @@ class _HomePageState extends State<HomePage> {
           return Card(
             elevation: 2,
             child: Container(
-              width: 150, // Lebar kartu akun
+              width: 150,
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(account.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text(account.bankName, style: TextStyle(color: Colors.grey[600])),
+                  Text(
+                    account.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    account.bankName,
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const Spacer(),
+                  // Tampilkan saldo awal (bisa di-refactor nanti)
+                  Text(
+                    'Rp ${account.initialBalance.toStringAsFixed(0)}',
+                     style: const TextStyle(
+                       fontWeight: FontWeight.bold,
+                       fontSize: 12,
+                     ),
+                  ),
                 ],
               ),
             ),
@@ -238,8 +255,8 @@ class _HomePageState extends State<HomePage> {
     }
 
     return ListView.builder(
-      shrinkWrap: true, // Agar bisa di dalam ListView utama
-      physics: const NeverScrollableScrollPhysics(), // Non-scrollable
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: _recentTransactions.length,
       itemBuilder: (context, index) {
         final trx = _recentTransactions[index];
