@@ -208,3 +208,6 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
     );
   }
 }
+
+SavingGoalFormModal({required Future<void> Function() onSaveSuccess}) {
+}
