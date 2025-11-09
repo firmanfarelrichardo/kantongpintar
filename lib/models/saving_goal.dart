@@ -30,7 +30,7 @@ class SavingGoal {
       'name': name,
       'target_amount': targetAmount,
       'current_amount': currentAmount,
-      'target_date': targetDate?.toIso8olString(),
+      'target_date': targetDate?.toIso8601String(),
       'icon_emoji': iconEmoji,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),

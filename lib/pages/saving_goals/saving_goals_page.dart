@@ -1,14 +1,16 @@
 // lib/pages/saving_goals/saving_goals_page.dart
-// (100% Siap Pakai - Menghubungkan tombol "Tambah Dana")
+// (100% Siap Pakai - Kode ini SUDAH BENAR)
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:testflutter/models/saving_goal.dart';
 import 'package:testflutter/services/saving_goal_repository.dart';
+
+// Impor ini sudah benar
 import 'package:testflutter/pages/saving_goals/saving_goal_form_modal.dart';
-// BARU: Import modal untuk menambah dana
 import 'package:testflutter/pages/saving_goals/saving_goal_fund_modal.dart';
 
+/// Halaman untuk menampilkan daftar "Tujuan Nabung" (Saving Goals).
 class SavingGoalsPage extends StatefulWidget {
   const SavingGoalsPage({super.key});
 
@@ -50,7 +52,7 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
     }
   }
 
-  // === 4. Modal Helpers (DIUPDATE) ===
+  // === 4. Modal Helpers ===
   
   /// Menampilkan modal untuk menambah tujuan baru
   void _showAddGoalModal() {
@@ -58,6 +60,7 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
+        // 'SavingGoalFormModal' sekarang sudah dikenali
         return SavingGoalFormModal(
           onSaveSuccess: _loadData, // Callback untuk me-refresh halaman ini
         );
@@ -65,16 +68,15 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
     );
   }
 
-  /// DIUPDATE: Menampilkan modal untuk menambah dana ke tujuan
+  /// Menampilkan modal untuk menambah dana ke tujuan
   void _showAddFundsModal(SavingGoal goal) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
-        // Panggil modal baru
         return SavingGoalFundModal(
-          goal: goal, // Berikan info "tujuan" yg akan diisi
-          onSaveSuccess: _loadData, // Refresh halaman ini setelah simpan
+          goal: goal,
+          onSaveSuccess: _loadData,
         );
       },
     );
@@ -97,13 +99,13 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
           ? const Center(child: CircularProgressIndicator())
           : _buildGoalList(),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddGoalModal,
+        onPressed: _showAddGoalModal, // Memanggil fungsi yang benar
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  /// Helper untuk membangun daftar tujuan (Tombol "Tambah Dana" sudah fungsional)
+  /// Helper untuk membangun daftar tujuan
   Widget _buildGoalList() {
     if (_goals.isEmpty) {
       return const Center(
@@ -144,7 +146,6 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // === Nama & Tombol Tambah Dana ===
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -161,7 +162,7 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
                     OutlinedButton.icon(
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Dana'),
-                      onPressed: () => _showAddFundsModal(goal), // <-- SUDAH AKTIF
+                      onPressed: () => _showAddFundsModal(goal),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.deepPurple),
                         foregroundColor: Colors.deepPurple,
@@ -171,7 +172,6 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
                 ),
                 const SizedBox(height: 12),
                 
-                // === Progress Bar ===
                 LinearProgressIndicator(
                   value: progress,
                   minHeight: 12,
@@ -181,7 +181,6 @@ class _SavingGoalsPageState extends State<SavingGoalsPage> {
                 ),
                 const SizedBox(height: 8),
 
-                // === Label Progress ===
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
