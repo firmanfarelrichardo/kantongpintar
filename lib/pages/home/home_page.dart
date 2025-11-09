@@ -1,14 +1,16 @@
 // lib/pages/home/home_page.dart
-// (100% Siap Pakai - Versi V3, dengan Modal Tambah Akun)
+// (100% Siap Pakai - Versi V5, dengan tombol ke Pockets Page)
 
 import 'package:flutter/material.dart';
-import 'package:testflutter/models/account.dart'; // Model baru
-import 'package:testflutter/models/transaction.dart'; // Model baru
-import 'package:testflutter/services/account_repository.dart'; // Repo baru
-import 'package:testflutter/services/transaction_repository.dart'; // Repo baru
+import 'package:testflutter/models/account.dart';
+import 'package:testflutter/models/transaction.dart';
+import 'package:testflutter/services/account_repository.dart';
+import 'package:testflutter/services/transaction_repository.dart';
 import 'package:testflutter/pages/transaction/transaction_form_modal.dart';
-// BARU: Import modal untuk menambah akun
 import 'package:testflutter/pages/account/account_form_modal.dart';
+import 'package:testflutter/pages/saving_goals/saving_goals_page.dart';
+// BARU: Import halaman pockets
+import 'package:testflutter/pages/pockets/pocket_management_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -37,9 +39,7 @@ class _HomePageState extends State<HomePage> {
 
   // === 4. Data Loading Function ===
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() { _isLoading = true; });
 
     try {
       final results = await Future.wait([
@@ -62,54 +62,72 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      setState(() {
-        _totalBalance = tempTotal;
-        _accounts = fetchedAccounts;
-        _recentTransactions = fetchedTransactions.take(5).toList();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _totalBalance = tempTotal;
+          _accounts = fetchedAccounts;
+          _recentTransactions = fetchedTransactions.take(5).toList();
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memuat data: $e')),
-      );
+      if (mounted) {
+        setState(() { _isLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat data: $e')),
+        );
+      }
     }
   }
 
-  // === 5. Helper untuk menampilkan Modal Transaksi ===
+  // === 5. Modal & Page Helpers ===
   void _showAddTransactionModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
         return TransactionFormModal(
-          onSaveSuccess: _loadData, // Callback untuk refresh
+          onSaveSuccess: _loadData,
         );
       },
     );
   }
 
-  // === 6. BARU: Helper untuk menampilkan Modal Akun ===
   void _showAddAccountModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
         return AccountFormModal(
-          onSaveSuccess: _loadData, // Callback untuk refresh
+          onSaveSuccess: _loadData,
         );
       },
     );
   }
+  
+  void _navigateToSavingGoals() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const SavingGoalsPage(),
+      ),
+    ).then((_) => _loadData());
+  }
 
-  // === 7. Build Method (UI) ===
+  /// BARU: Navigasi ke Halaman Pockets (Budget)
+  void _navigateToPockets() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const PocketManagementPage(),
+      ),
+    ).then((_) => _loadData()); // Refresh data saat kembali
+  }
+
+  // === 6. Build Method (UI) ===
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kantong Pintar (V2)'),
+        title: const Text('Kantong Pintar'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -121,29 +139,32 @@ class _HomePageState extends State<HomePage> {
           ? const Center(child: CircularProgressIndicator())
           : _buildContent(),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddTransactionModal, // Tombol ini untuk Transaksi
+        onPressed: _showAddTransactionModal,
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  // === 8. Helper Widgets untuk UI ===
-
-  /// Widget untuk membangun konten utama (dipisah agar `build` tetap bersih)
+  // === 7. Helper Widgets untuk UI ===
   Widget _buildContent() {
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
-        // === Kartu Total Saldo ===
         _buildTotalBalanceCard(),
+        const SizedBox(height: 16),
+        
+        // BARU: Kartu Navigasi ke Pockets
+        _buildPocketsCard(),
+        const SizedBox(height: 8),
+
+        // Kartu Navigasi ke Saving Goals
+        _buildSavingGoalsCard(),
         const SizedBox(height: 24),
 
-        // === Daftar Akun (DIUPDATE DENGAN TOMBOL +) ===
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Daftar Akunmu', style: Theme.of(context).textTheme.titleLarge),
-            // BARU: Tombol untuk menambah Akun
             IconButton(
               icon: const Icon(Icons.add_circle, color: Colors.deepPurple),
               onPressed: _showAddAccountModal,
@@ -153,15 +174,14 @@ class _HomePageState extends State<HomePage> {
         _buildAccountList(),
         const SizedBox(height: 24),
 
-        // === Transaksi Terakhir ===
         Text('Transaksi Terakhir', style: Theme.of(context).textTheme.titleLarge),
         _buildRecentTransactions(),
       ],
     );
   }
 
-  /// Widget untuk kartu total saldo
   Widget _buildTotalBalanceCard() {
+    // (Kode sama persis)
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -193,9 +213,37 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+  
+  /// BARU: Helper untuk kartu navigasi "Pockets"
+  Widget _buildPocketsCard() {
+    return Card(
+      elevation: 2,
+      child: ListTile(
+        leading: const Icon(Icons.wallet, color: Colors.orange, size: 30),
+        title: const Text('Kantong Budget', style: TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: const Text('Alokasikan dan lacak budget-mu'),
+        trailing: const Icon(Icons.arrow_forward_ios),
+        onTap: _navigateToPockets,
+      ),
+    );
+  }
 
-  /// Widget untuk menampilkan daftar akun
+  Widget _buildSavingGoalsCard() {
+    // (Kode sama persis)
+    return Card(
+      elevation: 2,
+      child: ListTile(
+        leading: const Icon(Icons.savings, color: Colors.green, size: 30),
+        title: const Text('Tujuan Nabung', style: TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: const Text('Lacak progres tabunganmu di sini'),
+        trailing: const Icon(Icons.arrow_forward_ios),
+        onTap: _navigateToSavingGoals,
+      ),
+    );
+  }
+
   Widget _buildAccountList() {
+    // (Kode sama persis)
     if (_accounts.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 20.0),
@@ -228,7 +276,6 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(color: Colors.grey[600]),
                   ),
                   const Spacer(),
-                  // Tampilkan saldo awal (bisa di-refactor nanti)
                   Text(
                     'Rp ${account.initialBalance.toStringAsFixed(0)}',
                      style: const TextStyle(
@@ -245,8 +292,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Widget untuk menampilkan transaksi terakhir
   Widget _buildRecentTransactions() {
+    // (Kode sama persis)
     if (_recentTransactions.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 20.0),
