@@ -1,9 +1,13 @@
 // lib/pages/home/home_page.dart
+// (100% Siap Pakai - Versi V2, Terhubung dengan Modal Baru)
 
 import 'package:flutter/material.dart';
-import '../../main.dart';
-import '../../services/pocket_service.dart';
-import 'pocket_creation_modal.dart'; // Modal untuk buat kantong
+import 'package:testflutter/models/account.dart'; // Model baru
+import 'package:testflutter/models/transaction.dart'; // Model baru
+import 'package:testflutter/services/account_repository.dart'; // Repo baru
+import 'package:testflutter/services/transaction_repository.dart'; // Repo baru
+// Import modal BARU, bukan yang lama
+import 'package:testflutter/pages/transaction/transaction_form_modal.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,214 +17,254 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final PocketService _pocketService = PocketService();
-  
-  // Fungsi untuk menampilkan modal Buat Kantong (image_ccba6f.png)
-  void _showCreatePocketModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true, 
-      builder: (_) {
-        // Kita gunakan modal yang akan kita buat sebentar lagi
-        return const PocketCreationModal(); 
-      },
-    ).then((_) {
-      // Refresh halaman setelah modal ditutup (jika ada penambahan kantong)
-      setState(() {});
-    });
+  // === 1. State Variables ===
+  bool _isLoading = true;
+  double _totalBalance = 0.0;
+  List<Account> _accounts = [];
+  List<Transaction> _recentTransactions = [];
+
+  // === 2. Repository Instances ===
+  final AccountRepository _accountRepo = AccountRepository();
+  final TransactionRepository _transactionRepo = TransactionRepository();
+
+  // === 3. Lifecycle: initState ===
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
   }
 
+  // === 4. Data Loading Function ===
+  /// Mengambil semua data dari database dan menghitung kalkulasi
+  Future<void> _loadData() async {
+    // Tampilkan loading spinner
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 1. Ambil semua data secara paralel
+      final results = await Future.wait([
+        _accountRepo.getAllAccounts(),
+        _transactionRepo.getAllTransactions(),
+      ]);
+
+      // 2. Pisahkan data
+      final fetchedAccounts = results[0] as List<Account>;
+      final fetchedTransactions = results[1] as List<Transaction>;
+
+      // 3. Kalkulasi Total Saldo (Fitur Utama)
+      double tempTotal = 0.0;
+      
+      // Tambahkan semua saldo awal dari setiap akun
+      for (final account in fetchedAccounts) {
+        tempTotal += account.initialBalance;
+      }
+
+      // Tambah/Kurangi berdasarkan histori transaksi
+      for (final trx in fetchedTransactions) {
+        if (trx.type == 'income') {
+          tempTotal += trx.amount;
+        } else if (trx.type == 'expense') {
+          tempTotal -= trx.amount;
+        }
+        // Tipe 'transfer' tidak mempengaruhi total saldo (uang hanya pindah)
+      }
+
+      // 4. Update State untuk "Gambar Ulang"
+      setState(() {
+        _totalBalance = tempTotal;
+        _accounts = fetchedAccounts;
+        // Ambil 5 transaksi terbaru untuk ditampilkan
+        _recentTransactions = fetchedTransactions.take(5).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      // Error handling jika database gagal
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal memuat data: $e')),
+      );
+    }
+  }
+
+  // === 5. Helper untuk menampilkan Modal Transaksi (UPDATE DARI LANGKAH SEBELUMNYA) ===
+  /// Fungsi ini dipanggil oleh FloatingActionButton
+  void _showAddTransactionModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // Penting agar keyboard tidak menutupi
+      builder: (ctx) {
+        // Panggil TransactionFormModal BARU
+        return TransactionFormModal(
+          // Ini adalah kuncinya:
+          // Kita 'memberikan' fungsi _loadData ke modal.
+          // Saat modal memanggil onSaveSuccess, _loadData akan dieksekusi.
+          onSaveSuccess: _loadData,
+        );
+      },
+    );
+  }
+
+  // === 6. Build Method (UI) (UPDATE DARI LANGKAH SEBELUMNYA) ===
+  // Ganti seluruh method 'build' kamu dengan yang ini
   @override
   Widget build(BuildContext context) {
-    final totalBalance = _pocketService.getInitialTotalBalance();
-    final pockets = _pocketService.getPockets();
-    
-    // Header dengan bubble circle
-    Widget header = Stack(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Kantong Pintar (V2)'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadData, // Panggil ulang fungsi _loadData
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildContent(),
+      
+      // FloatingActionButton sekarang memanggil helper baru kita
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddTransactionModal, // <-- DIUBAH DI SINI
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  // === 7. Helper Widgets untuk UI ===
+
+  /// Widget untuk membangun konten utama (dipisah agar `build` tetap bersih)
+  Widget _buildContent() {
+    return ListView(
+      padding: const EdgeInsets.all(16.0),
       children: [
-        // Background dengan bubble circle (Minimalisir hardcoding)
-        Container(
-          height: 150,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: kLightColor.withOpacity(0.5),
-            borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30)),
-          ),
-        ),
-        Positioned(
-          top: -50,
-          left: -50,
-          child: Container(width: 150, height: 150, decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.2), shape: BoxShape.circle)),
-        ),
-        Positioned(
-          top: 30,
-          left: 50,
-          child: Container(width: 80, height: 80, decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.4), shape: BoxShape.circle)),
-        ),
-        
-        // Konten utama Header
-        Padding(
-          padding: const EdgeInsets.only(top: 40, left: 16, right: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Beranda',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kTextColor),
-              ),
-              const SizedBox(height: 10),
-              
-              // Kartu Ringkasan (image_ccb6eb.png)
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      _buildSummaryRow('Pendapatan hari ini', 'Rp.', 'Pendapatan bulan ini', 'Rp.'),
-                      const Divider(height: 20),
-                      _buildSummaryRow('Pengeluaran hari ini', 'Rp.', 'Pengeluaran hari ini', 'Rp.'),
-                      const Divider(height: 20),
-                      
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildTotalItem(Icons.account_balance_wallet, 'Total Saldo', 'Rp. ${totalBalance.toStringAsFixed(2)}'),
-                          _buildTotalItem(Icons.wallet_travel, 'Kantong', '${pockets.length} Kantong'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        // === Kartu Total Saldo (Tema Gen Z) ===
+        _buildTotalBalanceCard(),
+        const SizedBox(height: 24),
+
+        // === Daftar Akun (Multi-Bank) ===
+        Text('Daftar Akunmu', style: Theme.of(context).textTheme.titleLarge),
+        _buildAccountList(),
+        const SizedBox(height: 24),
+
+        // === Transaksi Terakhir ===
+        Text('Transaksi Terakhir', style: Theme.of(context).textTheme.titleLarge),
+        _buildRecentTransactions(),
       ],
     );
+  }
 
-    return Scaffold(
-      appBar: AppBar(toolbarHeight: 0), // Menyembunyikan AppBar standar
-      body: SingleChildScrollView(
+  /// Widget untuk kartu total saldo
+  Widget _buildTotalBalanceCard() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: Colors.deepPurple, // Tema "Gen Z"
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            header,
-            const SizedBox(height: 20),
-            
-            // Bagian Kantong
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            const Text(
+              'TOTAL SALDO',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              // Format mata uang (akan kita perbaiki nanti)
+              'Rp ${(_totalBalance).toStringAsFixed(2)}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Widget untuk menampilkan daftar akun
+  Widget _buildAccountList() {
+    if (_accounts.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20.0),
+        child: Center(child: Text('Kamu belum punya akun. Tambahkan satu!')),
+      );
+    }
+    
+    // Tampilkan secara horizontal agar keren
+    return Container(
+      height: 100, // Tinggi kartu akun
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _accounts.length,
+        itemBuilder: (context, index) {
+          final account = _accounts[index];
+          return Card(
+            elevation: 2,
+            child: Container(
+              width: 150, // Lebar kartu akun
+              padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Kantong',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kTextColor),
-                  ),
-                  const SizedBox(height: 10),
-                  
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      // List Kantong yang sudah ada
-                      ...pockets.map((pocket) => _buildPocketCard(pocket.name, 'Rp. ${pocket.initialBalance.toStringAsFixed(0)}')).toList(),
-                      
-                      // Tombol Buat Kantong
-                      GestureDetector(
-                        onTap: _showCreatePocketModal,
-                        child: Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.grey.shade300, width: 2),
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add, color: kPrimaryColor),
-                              SizedBox(height: 5),
-                              Text('Buat Kantong', style: TextStyle(fontSize: 14, color: kPrimaryColor, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  Text(account.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(account.bankName, style: TextStyle(color: Colors.grey[600])),
                 ],
               ),
             ),
-            const SizedBox(height: 80), // Padding untuk Bottom Nav
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  // Helper Row Ringkasan
-  Widget _buildSummaryRow(String label1, String value1, String label2, String value2) {
-    return Row(
-      children: [
-        Expanded(child: _buildSummaryItem(label1, value1)),
-        Expanded(child: _buildSummaryItem(label2, value2)),
-      ],
-    );
-  }
+  /// Widget untuk menampilkan transaksi terakhir
+  Widget _buildRecentTransactions() {
+    if (_recentTransactions.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20.0),
+        child: Center(child: Text('Belum ada transaksi.')),
+      );
+    }
 
-  // Helper Item Ringkasan
-  Widget _buildSummaryItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kTextColor)),
-      ],
-    );
-  }
-  
-  // Helper Item Total Saldo/Kantong
-  Widget _buildTotalItem(IconData icon, String label, String value) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: kPrimaryColor, size: 24),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kTextColor)),
-          ],
-        )
-      ],
-    );
-  }
-
-  // Helper Card Kantong
-  Widget _buildPocketCard(String name, String balance) {
-    return Container(
-      width: 100,
-      height: 100,
-      decoration: BoxDecoration(
-        color: kPrimaryColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: kPrimaryColor.withOpacity(0.3), width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kTextColor)),
-            const SizedBox(height: 5),
-            Text(balance, style: const TextStyle(fontSize: 12, color: kPrimaryColor)),
-          ],
-        ),
-      ),
+    return ListView.builder(
+      shrinkWrap: true, // Agar bisa di dalam ListView utama
+      physics: const NeverScrollableScrollPhysics(), // Non-scrollable
+      itemCount: _recentTransactions.length,
+      itemBuilder: (context, index) {
+        final trx = _recentTransactions[index];
+        final isIncome = trx.type == 'income';
+        
+        return Card(
+          elevation: 1,
+          margin: const EdgeInsets.symmetric(vertical: 4.0),
+          child: ListTile(
+            leading: Icon(
+              isIncome ? Icons.arrow_downward : Icons.arrow_upward,
+              color: isIncome ? Colors.green : Colors.red,
+            ),
+            title: Text(trx.description ?? 'Tanpa Deskripsi'),
+            subtitle: Text(trx.transactionDate.toLocal().toString().split(' ')[0]),
+            trailing: Text(
+              '${isIncome ? '+' : '-'}Rp ${trx.amount.toStringAsFixed(0)}',
+              style: TextStyle(
+                color: isIncome ? Colors.green : Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
