@@ -1,19 +1,25 @@
 // lib/pages/transaction/transaction_form_modal.dart
+// (100% Siap Pakai - Menggantikan file lama)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../../main.dart';
-import '../../models/transaction.dart';
-import '../../services/transaction_service.dart';
-import '../../services/pocket_service.dart';
+import 'package:testflutter/models/account.dart';
+import 'package:testflutter/services/account_repository.dart';
+import 'package:testflutter/services/transaction_repository.dart';
+import 'package:testflutter/models/transaction.dart' as model; // Ubah nama import
 
-// Modal yang digunakan saat FAB diklik
+/// Modal untuk membuat transaksi baru.
+/// Direfactor total untuk menggunakan Repository dan Database SQLite.
 class TransactionFormModal extends StatefulWidget {
-  // Transaksi untuk diedit (saat ini kita fokus ke CREATE, tapi struktur harus ada)
-  final Transaction? transactionToEdit; 
-  
-  const TransactionFormModal({this.transactionToEdit, super.key});
+  /// Callback yang akan dipanggil setelah transaksi berhasil disimpan,
+  /// untuk memberi sinyal ke HomePage agar me-refresh datanya.
+  final VoidCallback onSaveSuccess;
+
+  const TransactionFormModal({
+    required this.onSaveSuccess,
+    super.key,
+  });
 
   @override
   State<TransactionFormModal> createState() => _TransactionFormModalState();
@@ -21,39 +27,137 @@ class TransactionFormModal extends StatefulWidget {
 
 class _TransactionFormModalState extends State<TransactionFormModal> {
   final _formKey = GlobalKey<FormState>();
-  final TransactionService _transactionService = TransactionService();
-  final PocketService _pocketService = PocketService();
   
+  // === 1. Akses ke "Departemen" Data ===
+  final TransactionRepository _transactionRepo = TransactionRepository();
+  final AccountRepository _accountRepo = AccountRepository();
+
+  // === 2. Controller & State Form ===
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  TransactionType _selectedType = TransactionType.expense; // Default Pengeluaran
+  String _selectedType = 'expense'; // Tipe transaksi: 'expense' atau 'income'
   DateTime _selectedDate = DateTime.now();
-  String? _selectedPocketId;
-  
+  String? _selectedAccountId; // ID Akun yang dipilih
+
+  // === 3. State untuk UI ===
+  bool _isLoadingAccounts = true;
+  bool _isSaving = false;
+  List<Account> _accounts = [];
+
   @override
   void initState() {
     super.initState();
-    // Mengambil pocket pertama sebagai default
-    if (_pocketService.getPockets().isNotEmpty) {
-      _selectedPocketId = _pocketService.getPockets().first.id;
+    // Saat modal dibuka, segera muat daftar akun
+    _loadAccounts();
+  }
+
+  /// Memuat daftar akun dari database untuk ditampilkan di Dropdown
+  Future<void> _loadAccounts() async {
+    try {
+      final accounts = await _accountRepo.getAllAccounts();
+      setState(() {
+        _accounts = accounts;
+        // Jika ada akun, pilih akun pertama sebagai default
+        if (_accounts.isNotEmpty) {
+          _selectedAccountId = _accounts.first.id;
+        }
+        _isLoadingAccounts = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingAccounts = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal memuat daftar akun: $e')),
+      );
     }
   }
 
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  /// Fungsi utama untuk menyimpan data ke database
+  Future<void> _submitForm() async {
+    // 1. Validasi form
+    if (!_formKey.currentState!.validate()) {
+      return; // Jika form tidak valid, hentikan
+    }
+    
+    // 2. Validasi tambahan
+    if (_selectedAccountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Anda harus memilih satu akun.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = true; // Tampilkan loading di tombol
+    });
+
+    try {
+      // 3. Buat object Transaction baru
+      final now = DateTime.now();
+      final newTransaction = model.Transaction(
+        // Buat ID unik berdasarkan timestamp
+        id: now.millisecondsSinceEpoch.toString(),
+        // Ambil data dari form
+        accountId: _selectedAccountId!,
+        amount: double.parse(_amountController.text.replaceAll('.', '')),
+        type: _selectedType,
+        description: _descriptionController.text,
+        transactionDate: _selectedDate,
+        // Set timestamp untuk pelacakan
+        createdAt: now,
+        updatedAt: now,
+        // Properti opsional lainnya bisa null
+        categoryId: null, 
+        pocketId: null,
+        transferGroupId: null,
+      );
+
+      // 4. Simpan ke Database SQLite
+      await _transactionRepo.createTransaction(newTransaction);
+
+      // 5. Beri tahu HomePage untuk refresh
+      widget.onSaveSuccess();
+
+      // 6. Tutup modal
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transaksi berhasil dicatat!')),
+        );
+      }
+    } catch (e) {
+      // Error handling
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan transaksi: $e')),
+        );
+      }
+    } finally {
+      // Hentikan loading di tombol
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+  
+  // Helper untuk memilih tanggal
   void _presentDatePicker() async {
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2023),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: ColorScheme.light(primary: kPrimaryColor),
-          ),
-          child: child!,
-        );
-      },
     );
     if (pickedDate != null) {
       setState(() {
@@ -61,35 +165,12 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
       });
     }
   }
-  
-  void _submitForm() {
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
-      
-      final newTransaction = Transaction(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        description: _descriptionController.text,
-        amount: double.parse(_amountController.text.replaceAll('.', '').replaceAll(',', '.')),
-        type: _selectedType,
-        date: _selectedDate,
-        pocketId: _selectedPocketId!,
-      );
-      
-      _transactionService.addTransaction(newTransaction);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Transaksi berhasil dicatat!')),
-      );
-      // Panggil refresh data (walaupun di sini kita tidak punya onSave)
-      Navigator.of(context).pop(); 
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
+    // Padding agar keyboard tidak menutupi form
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    final pockets = _pocketService.getPockets();
-    
+
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.only(
@@ -104,74 +185,83 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              // Toggle Pengeluaran/Pendapatan
+              // === Toggle Tipe Transaksi ===
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildTypeToggle('Pengeluaran', TransactionType.expense, kDangerColor),
-                  _buildTypeToggle('Pendapatan', TransactionType.income, kPrimaryColor),
+                  _buildTypeToggle('Pengeluaran', 'expense', Colors.red),
+                  _buildTypeToggle('Pemasukan', 'income', Colors.green),
                 ],
               ),
               const SizedBox(height: 20),
               
-              // 1. Pilih Kantong (Dropdown)
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Kantong', hintText: 'Pilih Kantong'),
-                value: _selectedPocketId,
-                items: pockets.map((pocket) => DropdownMenuItem(value: pocket.id, child: Text(pocket.name))).toList(),
-                onChanged: (newValue) => setState(() => _selectedPocketId = newValue),
-                validator: (value) => value == null ? 'Pilih kantong.' : null,
-              ),
+              // === Dropdown Akun (BARU) ===
+              _buildAccountDropdown(),
               const SizedBox(height: 10),
 
-              // 2. Waktu (Tanggal)
+              // === Pilih Tanggal ===
               GestureDetector(
                 onTap: _presentDatePicker,
                 child: InputDecorator(
                   decoration: const InputDecoration(
                     labelText: 'Waktu',
-                    suffixIcon: Icon(Icons.calendar_today, color: kPrimaryColor),
+                    suffixIcon: Icon(Icons.calendar_today),
                   ),
-                  child: Text(
-                    DateFormat('d MMM yyyy').format(_selectedDate),
-                    style: const TextStyle(fontSize: 16),
-                  ),
+                  child: Text(DateFormat('d MMM yyyy').format(_selectedDate)),
                 ),
               ),
               const SizedBox(height: 10),
 
-              // 3. Jumlah
+              // === Input Jumlah (Amount) ===
               TextFormField(
                 controller: _amountController,
                 decoration: const InputDecoration(labelText: 'Jumlah (Rp)'),
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) => value == null || double.tryParse(value) == null ? 'Masukkan jumlah yang valid.' : null,
+                validator: (value) {
+                  if (value == null || value.isEmpty || double.tryParse(value) == null) {
+                    return 'Masukkan jumlah yang valid.';
+                  }
+                  if (double.parse(value) <= 0) {
+                    return 'Jumlah harus lebih dari 0.';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 10),
 
-              // 4. Deskripsi
+              // === Input Deskripsi ===
               TextFormField(
                 controller: _descriptionController,
                 decoration: const InputDecoration(labelText: 'Deskripsi'),
-                maxLines: 3,
-                validator: (value) => value == null || value.isEmpty ? 'Deskripsi wajib diisi.' : null,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Deskripsi wajib diisi.';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 30),
 
-              // Tombol Simpan
+              // === Tombol Simpan ===
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimaryColor,
+                  backgroundColor: Colors.deepPurple, // Sesuaikan tema
                   padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: _submitForm,
-                child: const Text('Simpan', style: TextStyle(color: Colors.white, fontSize: 16)),
+                // Nonaktifkan tombol saat sedang menyimpan
+                onPressed: _isSaving ? null : _submitForm,
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(color: Colors.white),
+                      )
+                    : const Text(
+                        'SIMPAN',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
               ),
-              const SizedBox(height: 10),
-              
-              // Padding bawah untuk Bottom Nav (di desain ada, tapi di modal tidak perlu)
             ],
           ),
         ),
@@ -179,8 +269,37 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
     );
   }
 
-  // Helper Widget untuk Toggle Pengeluaran/Pendapatan
-  Widget _buildTypeToggle(String label, TransactionType type, Color color) {
+  // Helper widget untuk dropdown akun
+  Widget _buildAccountDropdown() {
+    if (_isLoadingAccounts) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_accounts.isEmpty) {
+      return const InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Akun',
+          errorText: 'Buat akun di halaman Home terlebih dahulu!',
+        ),
+      );
+    }
+    
+    return DropdownButtonFormField<String>(
+      decoration: const InputDecoration(labelText: 'Pilih Akun'),
+      value: _selectedAccountId,
+      items: _accounts.map((account) {
+        return DropdownMenuItem(
+          value: account.id,
+          child: Text('${account.bankName} - ${account.name}'),
+        );
+      }).toList(),
+      onChanged: (newValue) => setState(() => _selectedAccountId = newValue),
+      validator: (value) => value == null ? 'Pilih akun.' : null,
+    );
+  }
+
+  // Helper widget untuk toggle tipe
+  Widget _buildTypeToggle(String label, String type, Color color) {
     final bool isSelected = _selectedType == type;
     return Expanded(
       child: InkWell(
@@ -188,20 +307,14 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? color.withOpacity(0.9) : Colors.white,
-            border: Border.all(color: color.withOpacity(0.5)),
-            borderRadius: BorderRadius.only(
-              topLeft: type == TransactionType.expense ? const Radius.circular(8) : Radius.zero,
-              bottomLeft: type == TransactionType.expense ? const Radius.circular(8) : Radius.zero,
-              topRight: type == TransactionType.income ? const Radius.circular(8) : Radius.zero,
-              bottomRight: type == TransactionType.income ? const Radius.circular(8) : Radius.zero,
-            ),
+            color: isSelected ? color.withOpacity(0.9) : Colors.grey[200],
+            border: Border.all(color: isSelected ? color : Colors.grey[400]!),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.white : color,
+              color: isSelected ? Colors.white : Colors.black,
               fontWeight: FontWeight.bold,
             ),
           ),
