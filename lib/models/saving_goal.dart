@@ -1,5 +1,5 @@
 // lib/models/saving_goal.dart
-// (100% Siap Pakai)
+// (100% Siap Pakai - Menambahkan copyWith)
 
 /// Model Data untuk tabel 'SavingGoals'.
 /// Fitur "Gen Z" untuk melacak progres tabungan.
@@ -30,7 +30,7 @@ class SavingGoal {
       'name': name,
       'target_amount': targetAmount,
       'current_amount': currentAmount,
-      'target_date': targetDate?.toIso8601String(),
+      'target_date': targetDate?.toIso8olString(),
       'icon_emoji': iconEmoji,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -49,6 +49,29 @@ class SavingGoal {
       iconEmoji: map['icon_emoji'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
+    );
+  }
+
+  /// BARU: Helper copyWith untuk update yang immutable (Clean Code)
+  SavingGoal copyWith({
+    String? id,
+    String? name,
+    double? targetAmount,
+    double? currentAmount,
+    DateTime? targetDate,
+    String? iconEmoji,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return SavingGoal(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      targetAmount: targetAmount ?? this.targetAmount,
+      currentAmount: currentAmount ?? this.currentAmount,
+      targetDate: targetDate ?? this.targetDate,
+      iconEmoji: iconEmoji ?? this.iconEmoji,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }
