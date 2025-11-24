@@ -1,11 +1,13 @@
 // lib/pages/graph/graph_page.dart
-// (100% Siap Pakai - Menggantikan file lama dengan Pie Chart fungsional)
+// (REDESIGN: Bar Chart Analysis)
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart'; // Pastikan fl_chart ada di pubspec.yaml
-import 'package:testflutter/models/category.dart' as model;
-import 'package:testflutter/models/transaction.dart' as model;
-import 'package:testflutter/services/category_repository.dart';
+import 'package:intl/intl.dart';
+import 'package:testflutter/main.dart';
+import 'package:testflutter/models/account.dart';
+import 'package:testflutter/models/transaction.dart';
+import 'package:testflutter/services/account_repository.dart';
 import 'package:testflutter/services/transaction_repository.dart';
 
 class GraphPage extends StatefulWidget {
@@ -16,31 +18,14 @@ class GraphPage extends StatefulWidget {
 }
 
 class _GraphPageState extends State<GraphPage> {
-  // === 1. State ===
   bool _isLoading = true;
-  int _touchedIndex = -1; // Untuk interaksi chart
+  List<Account> _accounts = [];
 
-  // Data yang sudah diproses untuk chart
-  Map<String, double> _expenseData = {};
-  // Peta untuk menyimpan nama kategori (ID -> Nama)
-  Map<String, model.Category> _categoryMap = {};
+  // Data untuk Grafik: Key = Account ID, Value = {income: 0.0, expense: 0.0}
+  Map<String, Map<String, double>> _chartData = {};
 
-  // === 2. Repositories ===
-  final TransactionRepository _transactionRepo = TransactionRepository();
-  final CategoryRepository _categoryRepo = CategoryRepository();
-
-  // === 3. Colors ===
-  // Daftar warna default untuk chart agar "Gen Z"
-  final List<Color> _chartColors = [
-    Colors.purple[400]!,
-    Colors.blue[400]!,
-    Colors.green[400]!,
-    Colors.orange[400]!,
-    Colors.red[400]!,
-    Colors.teal[400]!,
-    Colors.pink[400]!,
-    Colors.indigo[400]!,
-  ];
+  final _trxRepo = TransactionRepository();
+  final _accRepo = AccountRepository();
 
   @override
   void initState() {
@@ -48,214 +33,155 @@ class _GraphPageState extends State<GraphPage> {
     _loadData();
   }
 
-  // === 4. Data Loading & Processing ===
   Future<void> _loadData() async {
     setState(() { _isLoading = true; });
-
     try {
-      // 1. Ambil semua data
-      final transactions = await _transactionRepo.getAllTransactions();
-      final categories = await _categoryRepo.getCategoriesByType('expense');
+      final results = await Future.wait([
+        _accRepo.getAllAccounts(),
+        _trxRepo.getAllTransactions(),
+      ]);
 
-      // 2. Buat "Peta" Kategori
-      final catMap = { for (var c in categories) c.id : c };
+      final accounts = results[0] as List<Account>;
+      final transactions = results[1] as List<Transaction>;
 
-      // 3. Agregasi (Proses) Data
-      // Kita akan menjumlahkan total pengeluaran per kategori
-      final aggData = <String, double>{};
-      for (final trx in transactions) {
-        // Hanya proses 'expense' yang memiliki kategori
-        if (trx.type == 'expense' && trx.categoryId != null) {
-          // Jika kategori sudah ada di map, tambahkan. Jika tidak, buat baru.
-          aggData[trx.categoryId!] = (aggData[trx.categoryId!] ?? 0) + trx.amount;
+      // Proses Data untuk Bar Chart
+      Map<String, Map<String, double>> data = {};
+
+      // Inisialisasi semua akun dengan 0
+      for (var acc in accounts) {
+        data[acc.id] = {'income': 0.0, 'expense': 0.0};
+      }
+
+      // Isi data
+      for (var t in transactions) {
+        if (data.containsKey(t.accountId)) {
+          if (t.type == 'income') {
+            data[t.accountId]!['income'] = (data[t.accountId]!['income'] ?? 0) + t.amount;
+          } else if (t.type == 'expense') {
+            data[t.accountId]!['expense'] = (data[t.accountId]!['expense'] ?? 0) + t.amount;
+          }
         }
       }
 
-      // 4. Update State
       if (mounted) {
         setState(() {
-          _expenseData = aggData;
-          _categoryMap = catMap;
+          _accounts = accounts;
+          _chartData = data;
           _isLoading = false;
         });
       }
-
     } catch (e) {
-      if (mounted) {
-        setState(() { _isLoading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat data grafik: $e')),
-        );
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // === 5. Build Method ===
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Grafik Pengeluaran'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Account Analysis')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _buildBody(),
-    );
-  }
-  
-  Widget _buildBody() {
-    if (_expenseData.isEmpty) {
-      return const Center(
-        child: Text(
-          'Belum ada data pengeluaran untuk ditampilkan.',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
-        ),
-      );
-    }
-    
-    // Ubah data Map menjadi List<PieChartSectionData>
-    final List<PieChartSectionData> sections = _buildChartSections();
+          : _accounts.isEmpty
+          ? const Center(child: Text('Belum ada data akun.'))
+          : Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            // Judul Legend
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildLegend(kDangerColor, 'Expense'),
+                const SizedBox(width: 20),
+                _buildLegend(kSuccessColor, 'Income'),
+              ],
+            ),
+            const SizedBox(height: 40),
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // === Pie Chart ===
-          AspectRatio(
-            aspectRatio: 1.3,
-            child: PieChart(
-              PieChartData(
-                pieTouchData: PieTouchData(
-                  touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                    setState(() {
-                      if (!event.isInterestedForInteractions ||
-                          pieTouchResponse == null ||
-                          pieTouchResponse.touchedSection == null) {
-                        _touchedIndex = -1;
-                        return;
-                      }
-                      _touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                    });
-                  },
+            // Bar Chart
+            Expanded(
+              child: BarChart(
+                BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  maxY: _calculateMaxY(),
+                  barTouchData: BarTouchData(enabled: true),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: _bottomTitles,
+                        reservedSize: 40,
+                      ),
+                    ),
+                    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  gridData: const FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  barGroups: _generateGroups(),
                 ),
-                borderData: FlBorderData(show: false),
-                sectionsSpace: 2, // Jarak antar irisan
-                centerSpaceRadius: 40, // Lubang di tengah
-                sections: sections,
               ),
             ),
-          ),
-          
-          // === Legenda Chart ===
-          _buildLegend(),
-        ],
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
 
-  /// Helper untuk membuat irisan Pie Chart dari data
-  List<PieChartSectionData> _buildChartSections() {
-    final List<PieChartSectionData> sections = [];
-    int index = 0;
-    
-    // Hitung total untuk kalkulasi persentase
-    final double totalValue = _expenseData.values.fold(0, (prev, e) => prev + e);
+  // Widget untuk judul sumbu bawah (Nama Akun)
+  Widget _bottomTitles(double value, TitleMeta meta) {
+    final index = value.toInt();
+    if (index < 0 || index >= _accounts.length) return const SizedBox.shrink();
 
-    for (final entry in _expenseData.entries) {
-      final isTouched = (index == _touchedIndex);
-      final fontSize = isTouched ? 16.0 : 12.0;
-      final radius = isTouched ? 60.0 : 50.0;
-      final percentage = (entry.value / totalValue) * 100;
-      
-      final categoryName = _categoryMap[entry.key]?.name ?? 'Lainnya';
-      final color = _chartColors[index % _chartColors.length]; // Ambil warna
-      
-      sections.add(
-        PieChartSectionData(
-          color: color,
-          value: entry.value,
-          title: '${percentage.toStringAsFixed(0)}%',
-          radius: radius,
-          titleStyle: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            shadows: const [Shadow(color: Colors.black, blurRadius: 2)],
-          ),
+    // Ambil nama akun, ambil 4 huruf pertama saja agar muat
+    String name = _accounts[index].name;
+    if (name.length > 4) name = name.substring(0, 4);
+
+    return SideTitleWidget(
+      axisSide: meta.axisSide,
+      child: Text(name, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+    );
+  }
+
+  List<BarChartGroupData> _generateGroups() {
+    List<BarChartGroupData> groups = [];
+    for (int i = 0; i < _accounts.length; i++) {
+      final accId = _accounts[i].id;
+      final income = _chartData[accId]?['income'] ?? 0.0;
+      final expense = _chartData[accId]?['expense'] ?? 0.0;
+
+      groups.add(
+        BarChartGroupData(
+          x: i,
+          barRods: [
+            BarChartRodData(toY: expense, color: kDangerColor, width: 12, borderRadius: BorderRadius.circular(4)),
+            BarChartRodData(toY: income, color: kSuccessColor, width: 12, borderRadius: BorderRadius.circular(4)),
+          ],
         ),
       );
-      index++;
     }
-    return sections;
+    return groups;
   }
-  
-  /// Helper untuk membuat legenda di bawah chart
-  Widget _buildLegend() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Wrap(
-        spacing: 16.0,
-        runSpacing: 8.0,
-        alignment: WrapAlignment.center,
-        children: _expenseData.entries.map((entry) {
-          final index = _expenseData.keys.toList().indexOf(entry.key);
-          final color = _chartColors[index % _chartColors.length];
-          final name = _categoryMap[entry.key]?.name ?? 'Lainnya';
-          final value = entry.value;
 
-          return _Indicator(
-            color: color,
-            text: '$name (Rp ${value.toStringAsFixed(0)})',
-            isSquare: false,
-          );
-        }).toList(),
-      ),
-    );
+  double _calculateMaxY() {
+    double maxVal = 0;
+    _chartData.forEach((key, value) {
+      if (value['income']! > maxVal) maxVal = value['income']!;
+      if (value['expense']! > maxVal) maxVal = value['expense']!;
+    });
+    return maxVal == 0 ? 1000 : maxVal * 1.2; // Tambah buffer 20%
   }
-}
 
-/// Widget kecil untuk item legenda (diambil dari contoh fl_chart)
-class _Indicator extends StatelessWidget {
-  const _Indicator({
-    required this.color,
-    required this.text,
-    required this.isSquare,
-    this.size = 16,
-    this.textColor,
-  });
-  final Color color;
-  final String text;
-  final bool isSquare;
-  final double size;
-  final Color? textColor;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildLegend(Color color, String text) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: isSquare ? BoxShape.rectangle : BoxShape.circle,
-            color: color,
-          ),
-        ),
+      children: [
+        Container(width: 12, height: 12, color: color),
         const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
-        )
+        Text(text, style: const TextStyle(fontWeight: FontWeight.bold, color: kTextColor)),
       ],
     );
   }

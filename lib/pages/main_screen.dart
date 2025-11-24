@@ -1,12 +1,12 @@
 // lib/pages/main_screen.dart
-// (100% Siap Pakai - Menambahkan kembali GraphPage ke 4 tab)
+// (Redesign: 5 Tabs Navigasi)
 
 import 'package:flutter/material.dart';
 import 'package:testflutter/pages/account/account_page.dart';
-import 'package:testflutter/pages/home/home_page.dart';
-import 'package:testflutter/pages/transaction/transaction_list_page.dart';
-// BARU: Import halaman grafik
+import 'package:testflutter/pages/category/category_page.dart'; // Halaman Baru
 import 'package:testflutter/pages/graph/graph_page.dart';
+import 'package:testflutter/pages/home/home_page.dart';
+import 'package:testflutter/pages/pockets/pocket_management_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -18,12 +18,18 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  // === UPDATE DAFTAR HALAMAN (4 HALAMAN) ===
+  // Urutan Tab sesuai screenshot:
+  // 1. Records (Home)
+  // 2. Analysis (Grafik)
+  // 3. Budgets (Pockets)
+  // 4. Accounts (Akun)
+  // 5. Categories (Kategori)
   final List<Widget> _pages = [
-    const HomePage(),
-    const TransactionListPage(),
-    const GraphPage(), // Halaman Grafik ditambahkan di sini
-    const AccountPage(),
+    const HomePage(),             // Records
+    const GraphPage(),            // Analysis
+    const PocketManagementPage(), // Budgets
+    const AccountPage(),          // Accounts
+    const CategoryPage(),         // Categories
   ];
 
   void _onItemTapped(int index) {
@@ -39,35 +45,43 @@ class _MainScreenState extends State<MainScreen> {
         index: _selectedIndex,
         children: _pages,
       ),
-      // === UPDATE LABEL NAVIGASI (4 TOMBOL) ===
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt),
-            label: 'Transaksi',
-          ),
-          // BARU: Tombol navigasi untuk Grafik
-          BottomNavigationBarItem(
-            icon: Icon(Icons.pie_chart),
-            label: 'Grafik',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Akun',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-
-        // PENTING: Untuk 4 item, kita set properti ini
-        // agar semua label terlihat dan warnanya konsisten.
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.deepPurple, // Sesuaikan dengan tema
-        unselectedItemColor: Colors.grey,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.2),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          type: BottomNavigationBarType.fixed, // Wajib fixed untuk 5 item
+          items: const <BottomNavigationBarItem>[
+            BottomNavigationBarItem(
+              icon: Icon(Icons.receipt_long),
+              label: 'Records',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.pie_chart), // Atau bar_chart
+              label: 'Analysis',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calculate),
+              label: 'Budgets',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet),
+              label: 'Accounts',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.label),
+              label: 'Categories',
+            ),
+          ],
+        ),
       ),
     );
   }

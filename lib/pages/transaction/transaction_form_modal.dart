@@ -330,7 +330,7 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
       items: currentList.map((category) {
         return DropdownMenuItem(
           value: category.id,
-          child: Text(category.name),
+          child: Text('${category.iconEmoji ?? ''} ${category.name}'),
         );
       }).toList(),
       onChanged: (newValue) => setState(() => _selectedCategoryId = newValue),

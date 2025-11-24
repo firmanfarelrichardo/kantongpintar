@@ -1,26 +1,39 @@
-// lib/main.dart (UPDATE TEMA)
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:device_preview/device_preview.dart'; 
-import 'pages/main_screen.dart'; // Menggunakan MainScreen baru untuk BottomNav
+import 'package:device_preview/device_preview.dart';
+import 'package:flutter/services.dart';
+// 1. Tambahkan import ini untuk inisialisasi tanggal
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:testflutter/pages/main_screen.dart';
 
-/// Warna tema: Hijau Mint/Tosca (Warna utama desain).
-const Color kPrimaryColor = Color(0xFF4CAF50); // Hijau Mint/Tosca (diubah dari Biru Tua)
-/// Warna aksen yang lebih terang untuk background dan bubble.
-const Color kLightColor = Color(0xFFB9F6CA); 
-// Tambahan: warna aksen untuk pemasukan (dipakai di beberapa widget).
-const Color kAccentColor = Color(0xFF66BB6A);
-/// Warna bahaya: Merah (untuk pengeluaran/keluar).
-const Color kDangerColor = Color(0xFFD32F2F); 
-/// Warna teks utama.
-const Color kTextColor = Color(0xFF333333);
+// === KONFIGURASI WARNA TEMA (Putih & Biru Muda) ===
+const Color kPrimaryColor = Color(0xFF29B6F6); // Biru Muda Cerah
+const Color kSecondaryColor = Color(0xFFE1F5FE); // Biru Sangat Muda
+const Color kBackgroundColor = Colors.white; // Putih bersih
+const Color kTextColor = Color(0xFF424242); // Abu-abu gelap
+const Color kDangerColor = Color(0xFFEF5350); // Merah lembut
+const Color kSuccessColor = Color(0xFF66BB6A); // Hijau lembut
 
-void main() {
+const Color kLightColor = kSecondaryColor;
+
+// 2. Ubah void main() menjadi async
+void main() async {
+  // 3. Pastikan binding terinisialisasi karena main() bersifat async
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 4. Inisialisasi data formatting untuk locale Indonesia ('id_ID')
+  // Ini yang MEMPERBAIKI error "Locale data has not been initialized"
+  await initializeDateFormatting('id_ID', null);
+
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+  ));
+
   runApp(
     DevicePreview(
-      enabled: !kReleaseMode, 
-      builder: (context) => const MyApp(), 
+      enabled: !kReleaseMode,
+      builder: (context) => const MyApp(),
     ),
   );
 }
@@ -31,36 +44,52 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      useInheritedMediaQuery: true, // rekomendasi untuk DevicePreview
-      locale: DevicePreview.locale(context), 
-      builder: DevicePreview.appBuilder, 
-      
-      debugShowCheckedModeBanner: false, 
+      useInheritedMediaQuery: true,
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
+      debugShowCheckedModeBanner: false,
       title: 'Kantong Pintar',
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: 'Roboto',
+
         colorScheme: ColorScheme.fromSeed(
           seedColor: kPrimaryColor,
           brightness: Brightness.light,
+          primary: kPrimaryColor,
+          surface: kBackgroundColor,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF5F5F5),
-        fontFamily: 'Roboto',
+
+        scaffoldBackgroundColor: kBackgroundColor,
+
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
+          backgroundColor: kBackgroundColor,
+          foregroundColor: kTextColor,
           elevation: 0,
+          centerTitle: true,
+          iconTheme: IconThemeData(color: kTextColor),
           titleTextStyle: TextStyle(
             color: kTextColor,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
-          iconTheme: IconThemeData(color: kTextColor),
         ),
+
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Colors.white,
+          selectedItemColor: kPrimaryColor,
+          unselectedItemColor: Colors.grey,
+          type: BottomNavigationBarType.fixed,
+          elevation: 8,
+        ),
+
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: kPrimaryColor,
           foregroundColor: Colors.white,
+          elevation: 4,
         ),
       ),
-      home: const MainScreen(), 
+      home: const MainScreen(),
     );
   }
 }
