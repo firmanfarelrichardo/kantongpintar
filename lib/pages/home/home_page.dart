@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/home_provider.dart';
 import '../../utils/currency_format.dart';
 import '../transaction/transaction_form_modal.dart'; // Import form transaksi
+import '../settings/settings_page.dart'; // Tambahkan import ini di atas
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -156,8 +157,15 @@ class _HomePageState extends State<HomePage> {
       ),
       actions: [
         IconButton(
-          onPressed: () {},
-          icon: Icon(Icons.notifications_none_rounded, color: Colors.grey[800]),
+          onPressed: () {
+            // NAVIGASI KE PENGATURAN
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsPage()),
+            );
+          },
+          // Ganti icon lonceng jadi icon gear (setting)
+          icon: Icon(Icons.settings_rounded, color: Colors.grey[800]),
         ),
         const SizedBox(width: 10),
       ],

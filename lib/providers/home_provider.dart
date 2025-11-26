@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/account.dart';
-import '../models/transaction.dart' as model; // Pakai alias biar ga bentrok
+import '../models/transaction.dart' as model;
 import '../services/account_repository.dart';
 import '../services/transaction_repository.dart';
 
@@ -23,14 +23,21 @@ class HomeProvider extends ChangeNotifier {
   List<TransactionDisplayItem> _recentTransactions = [];
   List<TransactionDisplayItem> get recentTransactions => _recentTransactions;
 
-  // Fungsi utama untuk memuat data
+  // === TAMBAHAN BARU UNTUK GRAPH PAGE ===
+  List<model.Transaction> _allTransactions = [];
+  List<model.Transaction> get allTransactions => _allTransactions;
+  // ======================================
+
   Future<void> loadHomeData() async {
     _isLoading = true;
-    notifyListeners(); // Beritahu UI bahwa kita sedang loading
+    notifyListeners();
 
     try {
       final accounts = await _accountRepo.getAllAccounts();
       final transactions = await _transactionRepo.getAllTransactions();
+
+      // Simpan semua transaksi ke variable state
+      _allTransactions = transactions;
 
       _calculateTotals(accounts, transactions);
       _processRecentTransactions(transactions, accounts);
@@ -39,7 +46,7 @@ class HomeProvider extends ChangeNotifier {
       print("Error loading home data: $e");
     } finally {
       _isLoading = false;
-      notifyListeners(); // Beritahu UI bahwa data siap
+      notifyListeners();
     }
   }
 
@@ -48,12 +55,10 @@ class HomeProvider extends ChangeNotifier {
     double pemasukan = 0.0;
     double pengeluaran = 0.0;
 
-    // 1. Hitung saldo awal dari semua akun
     for (var acc in accounts) {
       saldoAwal += acc.initialBalance;
     }
 
-    // 2. Hitung income dan expense dari transaksi
     for (var trx in transactions) {
       if (trx.type == 'income') {
         pemasukan += trx.amount;
@@ -64,21 +69,19 @@ class HomeProvider extends ChangeNotifier {
 
     _totalIncome = pemasukan;
     _totalExpense = pengeluaran;
-    // Rumus: Saldo Awal + Pemasukan - Pengeluaran
     _totalBalance = saldoAwal + pemasukan - pengeluaran;
   }
 
   void _processRecentTransactions(List<model.Transaction> transactions, List<Account> accounts) {
-    // Buat Map akun untuk pencarian nama cepat
     final accountMap = {for (var acc in accounts) acc.id: acc.name};
 
-    // Ambil 5 transaksi terakhir
+    // Ambil 5 transaksi terakhir untuk Home
     final recent = transactions.take(5).map((trx) {
       return TransactionDisplayItem(
         id: trx.id,
         amount: trx.amount,
         type: trx.type,
-        categoryName: trx.description ?? 'Umum', // Sementara pakai deskripsi sbg judul
+        categoryName: trx.description ?? 'Umum', // Fallback description jika kategori null
         description: accountMap[trx.accountId] ?? 'Akun',
         date: trx.transactionDate.toIso8601String(),
       );
@@ -88,7 +91,6 @@ class HomeProvider extends ChangeNotifier {
   }
 }
 
-// Helper Class untuk data yang siap tampil di UI
 class TransactionDisplayItem {
   final String id;
   final double amount;

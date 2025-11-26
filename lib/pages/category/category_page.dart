@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:testflutter/main.dart'; // Mengambil warna tema
 import 'package:testflutter/models/category.dart';
 import 'package:testflutter/services/category_repository.dart';
 import 'package:testflutter/pages/category/category_management_modal.dart';
@@ -14,10 +13,12 @@ class CategoryPage extends StatefulWidget {
 class _CategoryPageState extends State<CategoryPage> {
   final CategoryRepository _categoryRepo = CategoryRepository();
 
-  // State Data
   bool _isLoading = true;
   List<Category> _expenseCategories = [];
   List<Category> _incomeCategories = [];
+
+  // DEFINISI WARNA LOKAL
+  final Color _backgroundColor = const Color(0xFFF8F9FE);
 
   @override
   void initState() {
@@ -26,7 +27,7 @@ class _CategoryPageState extends State<CategoryPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() { _isLoading = true; });
+    setState(() => _isLoading = true);
     try {
       final results = await Future.wait([
         _categoryRepo.getCategoriesByType('expense'),
@@ -45,13 +46,12 @@ class _CategoryPageState extends State<CategoryPage> {
     }
   }
 
-  // Menampilkan modal tambah kategori
   void _showAddCategoryModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => const CategoryManagementModal(),
-    ).then((_) => _loadData()); // Refresh setelah tutup modal
+    ).then((_) => _loadData());
   }
 
   Future<void> _deleteCategory(String id) async {
@@ -60,12 +60,12 @@ class _CategoryPageState extends State<CategoryPage> {
       _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Kategori dihapus')),
+          const SnackBar(content: Text('Kategori berhasil dihapus')),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal hapus. Mungkin sedang dipakai transaksi.')),
+        const SnackBar(content: Text('Gagal hapus. Kategori sedang dipakai transaksi.')),
       );
     }
   }
@@ -73,48 +73,52 @@ class _CategoryPageState extends State<CategoryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: const Text('Categories'),
+        title: const Text('Kategori'),
         centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        titleTextStyle: TextStyle(color: Colors.grey[800], fontWeight: FontWeight.bold, fontSize: 18),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddCategoryModal,
-        backgroundColor: kPrimaryColor,
+        backgroundColor: const Color(0xFF009FFD),
         shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white, size: 32),
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-        padding: const EdgeInsets.only(bottom: 80), // Space untuk FAB
+        padding: const EdgeInsets.only(bottom: 80),
         children: [
-          _buildSectionHeader('Income categories'),
-          ..._incomeCategories.map((c) => _buildCategoryItem(c, Colors.blue)),
+          _buildSectionHeader('Kategori Pemasukan', Colors.green),
+          ..._incomeCategories.map((c) => _buildCategoryItem(c, Colors.green)),
 
           const SizedBox(height: 20),
 
-          _buildSectionHeader('Expense categories'),
-          ..._expenseCategories.map((c) => _buildCategoryItem(c, Colors.red)),
+          _buildSectionHeader('Kategori Pengeluaran', Colors.redAccent),
+          ..._expenseCategories.map((c) => _buildCategoryItem(c, Colors.redAccent)),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Row(
         children: [
+          Container(width: 4, height: 16, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 8),
           Text(
             title,
-            style: const TextStyle(
-              color: Colors.grey,
+            style: TextStyle(
+              color: Colors.grey[700],
               fontWeight: FontWeight.bold,
               fontSize: 14,
             ),
           ),
-          const Divider(),
         ],
       ),
     );
@@ -125,36 +129,33 @@ class _CategoryPageState extends State<CategoryPage> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          )
+          BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 2))
         ],
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: CircleAvatar(
+          radius: 20,
           backgroundColor: color.withOpacity(0.1),
           child: Text(
             category.iconEmoji ?? category.name[0].toUpperCase(),
-            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18),
+            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16),
           ),
         ),
         title: Text(
           category.name,
-          style: const TextStyle(fontWeight: FontWeight.w500, color: kTextColor),
+          style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF424242)),
         ),
         trailing: IconButton(
-          icon: const Icon(Icons.more_horiz, color: Colors.grey),
+          icon: Icon(Icons.delete_outline_rounded, color: Colors.grey[400]),
           onPressed: () {
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: Text('Hapus ${category.name}?'),
-                content: const Text('Yakin ingin menghapus kategori ini?'),
+                title: const Text('Hapus Kategori?'),
+                content: Text('Yakin ingin menghapus "${category.name}"?'),
                 actions: [
                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
                   TextButton(
