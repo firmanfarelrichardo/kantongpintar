@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import '../models/account.dart';
+import '../models/pocket.dart'; // IMPORT MODEL POCKET
 import '../models/transaction.dart' as model;
 import '../services/account_repository.dart';
+import '../services/pocket_repository.dart'; // IMPORT REPO POCKET
 import '../services/transaction_repository.dart';
 
 class HomeProvider extends ChangeNotifier {
   final AccountRepository _accountRepo = AccountRepository();
   final TransactionRepository _transactionRepo = TransactionRepository();
+  final PocketRepository _pocketRepo = PocketRepository(); // TAMBAH REPO
 
   bool _isLoading = true;
   bool get isLoading => _isLoading;
@@ -23,24 +26,35 @@ class HomeProvider extends ChangeNotifier {
   List<TransactionDisplayItem> _recentTransactions = [];
   List<TransactionDisplayItem> get recentTransactions => _recentTransactions;
 
-  // === TAMBAHAN BARU UNTUK GRAPH PAGE ===
   List<model.Transaction> _allTransactions = [];
   List<model.Transaction> get allTransactions => _allTransactions;
-  // ======================================
+
+  // === TAMBAHAN DATA POCKET & AKUN ===
+  List<Pocket> _pockets = [];
+  List<Pocket> get pockets => _pockets;
+
+  List<Account> _accounts = [];
+  List<Account> get accounts => _accounts;
+  // ===================================
 
   Future<void> loadHomeData() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final accounts = await _accountRepo.getAllAccounts();
-      final transactions = await _transactionRepo.getAllTransactions();
+      // Load semua data sekaligus (Parallel)
+      final results = await Future.wait([
+        _accountRepo.getAllAccounts(),
+        _transactionRepo.getAllTransactions(),
+        _pocketRepo.getAllPockets(), // LOAD POCKETS JUGA
+      ]);
 
-      // Simpan semua transaksi ke variable state
-      _allTransactions = transactions;
+      _accounts = results[0] as List<Account>;
+      _allTransactions = results[1] as List<model.Transaction>;
+      _pockets = results[2] as List<Pocket>; // SIMPAN POCKETS
 
-      _calculateTotals(accounts, transactions);
-      _processRecentTransactions(transactions, accounts);
+      _calculateTotals(_accounts, _allTransactions);
+      _processRecentTransactions(_allTransactions, _accounts);
 
     } catch (e) {
       print("Error loading home data: $e");
@@ -50,6 +64,7 @@ class HomeProvider extends ChangeNotifier {
     }
   }
 
+  // (Sisa fungsi _calculateTotals dan _processRecentTransactions SAMA, tidak perlu diubah)
   void _calculateTotals(List<Account> accounts, List<model.Transaction> transactions) {
     double saldoAwal = 0.0;
     double pemasukan = 0.0;
@@ -75,13 +90,12 @@ class HomeProvider extends ChangeNotifier {
   void _processRecentTransactions(List<model.Transaction> transactions, List<Account> accounts) {
     final accountMap = {for (var acc in accounts) acc.id: acc.name};
 
-    // Ambil 5 transaksi terakhir untuk Home
     final recent = transactions.take(5).map((trx) {
       return TransactionDisplayItem(
         id: trx.id,
         amount: trx.amount,
         type: trx.type,
-        categoryName: trx.description ?? 'Umum', // Fallback description jika kategori null
+        categoryName: trx.description ?? 'Umum',
         description: accountMap[trx.accountId] ?? 'Akun',
         date: trx.transactionDate.toIso8601String(),
       );

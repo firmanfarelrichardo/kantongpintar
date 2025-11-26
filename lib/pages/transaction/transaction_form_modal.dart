@@ -41,15 +41,15 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isCategoryLocked = false; // State untuk mengunci kategori
 
   List<Account> _accounts = [];
   List<Category> _expenseCategories = [];
   List<Category> _incomeCategories = [];
   List<Pocket> _pockets = [];
 
-  // Warna Tema (Sama dengan Home)
+  // Warna Tema
   final Color _primaryColor = const Color(0xFF2A2A72);
-  final Color _activeToggleColor = const Color(0xFF009FFD);
 
   @override
   void initState() {
@@ -75,6 +75,7 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
           _pockets = results[3] as List<Pocket>;
 
           if (_accounts.isNotEmpty) _selectedAccountId = _accounts.first.id;
+          // Default kategori expense pertama
           if (_expenseCategories.isNotEmpty) _selectedCategoryId = _expenseCategories.first.id;
 
           _isLoading = false;
@@ -85,6 +86,30 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
     }
   }
 
+  // LOGIKA PENTING: Saat Pocket dipilih
+  void _onPocketChanged(String? pocketId) {
+    setState(() {
+      _selectedPocketId = pocketId;
+
+      if (pocketId != null) {
+        // Cari data pocket yang dipilih
+        final pocket = _pockets.firstWhere((p) => p.id == pocketId);
+
+        // Jika pocket punya kategori khusus
+        if (pocket.categoryId != null) {
+          _selectedCategoryId = pocket.categoryId;
+          _isCategoryLocked = true; // KUNCI DROPDOWN KATEGORI
+        } else {
+          // Jika pocket umum (tidak ada kategori), jangan dikunci
+          _isCategoryLocked = false;
+        }
+      } else {
+        // Jika pocket di-unselect (pilih null), buka kunci
+        _isCategoryLocked = false;
+      }
+    });
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedAccountId == null) return;
@@ -93,7 +118,6 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
 
     try {
       final now = DateTime.now();
-      // Gabungkan tanggal yang dipilih dengan jam sekarang agar urutan rapi
       final finalDate = DateTime(
           _selectedDate.year, _selectedDate.month, _selectedDate.day,
           now.hour, now.minute, now.second
@@ -107,7 +131,7 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
         description: _descriptionController.text,
         transactionDate: finalDate,
         categoryId: _selectedCategoryId,
-        pocketId: _selectedPocketId,
+        pocketId: _selectedPocketId, // Simpan ID Pocket
         transferGroupId: null,
         createdAt: now,
         updatedAt: now,
@@ -146,42 +170,27 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
 
   @override
   Widget build(BuildContext context) {
-    // Agar modal naik saat keyboard muncul
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85, // Tinggi modal 85% layar
+      height: MediaQuery.of(context).size.height * 0.90, // Sedikit lebih tinggi
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       child: Column(
         children: [
-          // 1. Handle Bar Kecil di Atas
           Center(
             child: Container(
               margin: const EdgeInsets.only(top: 12, bottom: 20),
-              width: 50,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
+              width: 50, height: 5,
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
             ),
           ),
 
-          // 2. Judul Modal
-          Text(
-            "Tambah Transaksi",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
-            ),
-          ),
+          Text("Tambah Transaksi", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey[800])),
           const SizedBox(height: 20),
 
-          // 3. Isi Form (Scrollable)
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -192,11 +201,9 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // TOGGLE TIPE (Expense / Income)
                     _buildModernToggle(),
                     const SizedBox(height: 25),
 
-                    // INPUT JUMLAH (Hero Input)
                     const Text("Total Nominal", style: TextStyle(color: Colors.grey, fontSize: 12)),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -210,11 +217,7 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                       ),
                       decoration: InputDecoration(
                         prefixText: "Rp ",
-                        prefixStyle: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[400]
-                        ),
+                        prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.grey[400]),
                         border: InputBorder.none,
                         hintText: "0",
                         hintStyle: TextStyle(color: Colors.grey[300]),
@@ -224,7 +227,6 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                     const Divider(thickness: 1),
                     const SizedBox(height: 20),
 
-                    // DROPDOWN AKUN
                     _buildLabel("Sumber Dana / Akun"),
                     _buildDropdown(
                       value: _selectedAccountId,
@@ -235,19 +237,48 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                     ),
                     const SizedBox(height: 16),
 
-                    // DROPDOWN KATEGORI
+                    // PILIHAN ANGGARAN (POCKET) - HANYA JIKA PENGELUARAN
+                    if (_selectedType == 'expense') ...[
+                      _buildLabel("Ambil dari Anggaran (Opsional)"),
+                      _buildDropdown(
+                        value: _selectedPocketId,
+                        hint: "Pilih Anggaran (Misal: Uang Makan)",
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text("Tidak Pakai Anggaran")),
+                          ..._pockets.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name)))
+                        ],
+                        onChanged: (v) => _onPocketChanged(v as String?), // Panggil fungsi logika kunci
+                        icon: Icons.savings_rounded,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     _buildLabel("Kategori"),
-                    _buildDropdown(
-                      value: _selectedCategoryId,
-                      hint: "Pilih Kategori",
-                      items: (_selectedType == 'expense' ? _expenseCategories : _incomeCategories)
-                          .map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
-                      onChanged: (v) => setState(() => _selectedCategoryId = v as String?),
-                      icon: Icons.category_rounded,
+                    // Dropdown Kategori (Bisa Disabled)
+                    Opacity(
+                      opacity: _isCategoryLocked ? 0.6 : 1.0, // Efek visual jika disabled
+                      child: _buildDropdown(
+                        value: _selectedCategoryId,
+                        hint: "Pilih Kategori",
+                        // Jika dikunci, disable onChanged
+                        onChanged: _isCategoryLocked ? null : (v) => setState(() => _selectedCategoryId = v as String?),
+                        items: (_selectedType == 'expense' ? _expenseCategories : _incomeCategories)
+                            .map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
+                        icon: _isCategoryLocked ? Icons.lock_rounded : Icons.category_rounded, // Ganti icon gembok jika dikunci
+                      ),
                     ),
+                    // Pesan kecil jika terkunci
+                    if (_isCategoryLocked)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6, left: 4),
+                        child: Text(
+                          "*Kategori dikunci sesuai Anggaran yang dipilih",
+                          style: TextStyle(fontSize: 11, color: Colors.orange[800], fontStyle: FontStyle.italic),
+                        ),
+                      ),
+
                     const SizedBox(height: 16),
 
-                    // DATE PICKER
                     _buildLabel("Tanggal"),
                     GestureDetector(
                       onTap: _presentDatePicker,
@@ -272,7 +303,6 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                     ),
                     const SizedBox(height: 16),
 
-                    // DESKRIPSI (Opsional)
                     _buildLabel("Catatan (Opsional)"),
                     TextFormField(
                       controller: _descriptionController,
@@ -282,21 +312,14 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                         hintText: "Contoh: Makan siang...",
                         hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[200]!),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[200]!),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
                         prefixIcon: Icon(Icons.notes_rounded, color: Colors.grey[400]),
                       ),
                     ),
 
                     const SizedBox(height: 30),
 
-                    // TOMBOL SIMPAN
                     SizedBox(
                       width: double.infinity,
                       height: 55,
@@ -304,17 +327,12 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                         onPressed: _isSaving ? null : _submitForm,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _primaryColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           elevation: 2,
                         ),
                         child: _isSaving
-                            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text(
-                          "SIMPAN TRANSAKSI",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
+                            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white))
+                            : const Text("SIMPAN TRANSAKSI", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                       ),
                     ),
                   ],
@@ -327,8 +345,6 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
     );
   }
 
-  // --- WIDGETS HELPER ---
-
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, left: 4),
@@ -340,12 +356,12 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
     required String? value,
     required String hint,
     required List<DropdownMenuItem<Object>>? items,
-    required Function(Object?) onChanged,
+    required Function(Object?)? onChanged, // Bisa null jika disabled
     required IconData icon,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: onChanged == null ? Colors.grey[200] : Colors.grey[50], // Warna agak gelap jika disabled
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[200]!),
       ),
@@ -353,9 +369,9 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
       child: DropdownButtonHideUnderline(
         child: DropdownButtonFormField(
           decoration: InputDecoration(
-            icon: Icon(icon, color: _primaryColor, size: 22),
+            icon: Icon(icon, color: onChanged == null ? Colors.grey : _primaryColor, size: 22),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12), // Padding vertikal pas
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
           ),
           value: value,
           hint: Text(hint, style: TextStyle(fontSize: 14, color: Colors.grey[400])),
@@ -392,7 +408,9 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
         onTap: () {
           setState(() {
             _selectedType = type;
-            // Reset kategori jika pindah tipe
+            _selectedPocketId = null; // Reset pocket jika ganti tipe
+            _isCategoryLocked = false; // Buka kunci kategori
+
             if (type == 'expense') {
               _selectedCategoryId = _expenseCategories.isNotEmpty ? _expenseCategories.first.id : null;
             } else {

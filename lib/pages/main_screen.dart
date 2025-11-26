@@ -1,9 +1,6 @@
-// lib/pages/main_screen.dart
-// (Redesign: 5 Tabs Navigasi)
-
 import 'package:flutter/material.dart';
 import 'package:testflutter/pages/account/account_page.dart';
-import 'package:testflutter/pages/category/category_page.dart'; // Halaman Baru
+import 'package:testflutter/pages/category/category_page.dart';
 import 'package:testflutter/pages/graph/graph_page.dart';
 import 'package:testflutter/pages/home/home_page.dart';
 import 'package:testflutter/pages/pockets/pocket_management_page.dart';
@@ -18,18 +15,12 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  // Urutan Tab sesuai screenshot:
-  // 1. Records (Home)
-  // 2. Analysis (Grafik)
-  // 3. Budgets (Pockets)
-  // 4. Accounts (Akun)
-  // 5. Categories (Kategori)
   final List<Widget> _pages = [
-    const HomePage(),             // Records
-    const GraphPage(),            // Analysis
-    const PocketManagementPage(), // Budgets
-    const AccountPage(),          // Accounts
-    const CategoryPage(),         // Categories
+    const HomePage(),
+    const GraphPage(),
+    const PocketManagementPage(),
+    const AccountPage(),
+    const CategoryPage(),
   ];
 
   void _onItemTapped(int index) {
@@ -47,9 +38,10 @@ class _MainScreenState extends State<MainScreen> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
+          color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
+              color: Colors.grey.withOpacity(0.1),
               blurRadius: 10,
               offset: const Offset(0, -5),
             ),
@@ -58,28 +50,18 @@ class _MainScreenState extends State<MainScreen> {
         child: BottomNavigationBar(
           currentIndex: _selectedIndex,
           onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed, // Wajib fixed untuk 5 item
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFF2A2A72),
+          unselectedItemColor: Colors.grey[400],
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
           items: const <BottomNavigationBarItem>[
-            BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long),
-              label: 'Records',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.pie_chart), // Atau bar_chart
-              label: 'Analysis',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.calculate),
-              label: 'Budgets',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.account_balance_wallet),
-              label: 'Accounts',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.label),
-              label: 'Categories',
-            ),
+            BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Riwayat'),
+            BottomNavigationBarItem(icon: Icon(Icons.pie_chart_rounded), label: 'Analisis'),
+            BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_rounded), label: 'Anggaran'),
+            BottomNavigationBarItem(icon: Icon(Icons.credit_card_rounded), label: 'Akun'),
+            BottomNavigationBarItem(icon: Icon(Icons.category_rounded), label: 'Kategori'),
           ],
         ),
       ),

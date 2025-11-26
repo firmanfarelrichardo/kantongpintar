@@ -9,8 +9,9 @@ import 'package:testflutter/services/pocket_repository.dart';
 
 class PocketFormModal extends StatefulWidget {
   final VoidCallback onSaveSuccess;
+  final Pocket? pocketToEdit; // Parameter tambahan untuk Edit
 
-  const PocketFormModal({required this.onSaveSuccess, super.key});
+  const PocketFormModal({required this.onSaveSuccess, this.pocketToEdit, super.key});
 
   @override
   State<PocketFormModal> createState() => _PocketFormModalState();
@@ -33,7 +34,6 @@ class _PocketFormModalState extends State<PocketFormModal> {
   List<Account> _accounts = [];
   List<Category> _expenseCategories = [];
 
-  // Warna Tema
   final Color _primaryColor = const Color(0xFF2A2A72);
 
   @override
@@ -54,7 +54,19 @@ class _PocketFormModalState extends State<PocketFormModal> {
         setState(() {
           _accounts = results[0] as List<Account>;
           _expenseCategories = results[1] as List<Category>;
-          if (_accounts.isNotEmpty) _selectedAccountId = _accounts.first.id;
+
+          // LOGIKA EDIT: Jika ada data edit, isi form
+          if (widget.pocketToEdit != null) {
+            final p = widget.pocketToEdit!;
+            _nameController.text = p.name;
+            _budgetAmountController.text = p.budgetedAmount.toStringAsFixed(0);
+            _selectedAccountId = p.accountId;
+            _selectedCategoryId = p.categoryId;
+          } else {
+            // Mode Tambah Baru
+            if (_accounts.isNotEmpty) _selectedAccountId = _accounts.first.id;
+          }
+
           _isLoading = false;
         });
       }
@@ -73,17 +85,28 @@ class _PocketFormModalState extends State<PocketFormModal> {
       final now = DateTime.now();
       final budgetAmount = double.parse(_budgetAmountController.text.replaceAll('.', ''));
 
+      // Jika Edit, pakai ID lama. Jika Baru, buat ID baru.
+      final id = widget.pocketToEdit?.id ?? now.millisecondsSinceEpoch.toString();
+      final createdAt = widget.pocketToEdit?.createdAt ?? now;
+
       final newPocket = Pocket(
-        id: now.millisecondsSinceEpoch.toString(),
+        id: id,
         name: _nameController.text,
         accountId: _selectedAccountId!,
         categoryId: _selectedCategoryId,
         budgetedAmount: budgetAmount,
-        createdAt: now,
+        createdAt: createdAt,
         updatedAt: now,
       );
 
-      await _pocketRepo.createPocket(newPocket);
+      // Repository sudah support 'replace' (insert OR update), jadi aman pakai createPocket
+      // Atau panggil updatePocket untuk lebih eksplisit jika ada method-nya
+      if (widget.pocketToEdit != null) {
+        await _pocketRepo.updatePocket(newPocket);
+      } else {
+        await _pocketRepo.createPocket(newPocket);
+      }
+
       widget.onSaveSuccess();
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -96,6 +119,7 @@ class _PocketFormModalState extends State<PocketFormModal> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isEdit = widget.pocketToEdit != null;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.80,
@@ -105,7 +129,6 @@ class _PocketFormModalState extends State<PocketFormModal> {
       ),
       child: Column(
         children: [
-          // Handle Bar
           Center(
             child: Container(
               margin: const EdgeInsets.only(top: 12, bottom: 20),
@@ -114,7 +137,7 @@ class _PocketFormModalState extends State<PocketFormModal> {
             ),
           ),
 
-          Text("Buat Anggaran Baru", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey[800])),
+          Text(isEdit ? "Edit Anggaran" : "Buat Anggaran Baru", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey[800])),
           const SizedBox(height: 20),
 
           Expanded(
@@ -127,7 +150,6 @@ class _PocketFormModalState extends State<PocketFormModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Input Nama
                     _buildLabel("Nama Anggaran"),
                     TextFormField(
                       controller: _nameController,
@@ -136,7 +158,6 @@ class _PocketFormModalState extends State<PocketFormModal> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Input Budget
                     _buildLabel("Batas Anggaran (Rp)"),
                     TextFormField(
                       controller: _budgetAmountController,
@@ -148,7 +169,6 @@ class _PocketFormModalState extends State<PocketFormModal> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Dropdown Akun
                     _buildLabel("Sumber Dana"),
                     _buildDropdown(
                         value: _selectedAccountId,
@@ -159,7 +179,6 @@ class _PocketFormModalState extends State<PocketFormModal> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Dropdown Kategori (Opsional)
                     _buildLabel("Kategori Khusus (Opsional)"),
                     _buildDropdown(
                         value: _selectedCategoryId,
@@ -174,7 +193,6 @@ class _PocketFormModalState extends State<PocketFormModal> {
 
                     const SizedBox(height: 30),
 
-                    // Tombol Simpan
                     SizedBox(
                       width: double.infinity,
                       height: 55,
@@ -187,7 +205,7 @@ class _PocketFormModalState extends State<PocketFormModal> {
                         ),
                         child: _isSaving
                             ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white))
-                            : const Text("SIMPAN ANGGARAN", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                            : Text(isEdit ? "UPDATE ANGGARAN" : "SIMPAN ANGGARAN", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                       ),
                     ),
                   ],
@@ -200,6 +218,9 @@ class _PocketFormModalState extends State<PocketFormModal> {
     );
   }
 
+  // ... (Widget helper _buildLabel, _inputDecoration, _buildDropdown tetap sama)
+  // Copy paste helper widgets dari kode sebelumnya di sini jika perlu, atau biarkan jika tidak berubah.
+  // Agar lengkap saya sertakan:
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, left: 4),

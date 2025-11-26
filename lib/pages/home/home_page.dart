@@ -3,8 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/home_provider.dart';
 import '../../utils/currency_format.dart';
-import '../transaction/transaction_form_modal.dart'; // Import form transaksi
-import '../settings/settings_page.dart'; // Tambahkan import ini di atas
+import '../transaction/transaction_form_modal.dart'; // Import form tambah
+import '../transaction/transaction_list_page.dart'; // Import halaman lihat semua
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -87,8 +87,11 @@ class _HomePageState extends State<HomePage> {
                   ),
                   TextButton(
                     onPressed: () {
-                      // Navigasi ke halaman semua transaksi (Tab Records/Home)
-                      // Karena ini di dalam MainScreen, user bisa klik tab bawah
+                      // NAVIGASI KE HALAMAN DAFTAR TRANSAKSI LENGKAP
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const TransactionListPage()),
+                      );
                     },
                     child: const Text("Lihat Semua"),
                   )
@@ -103,7 +106,7 @@ class _HomePageState extends State<HomePage> {
               else
                 ...provider.recentTransactions.map((tx) {
                   return _buildTransactionItem(tx);
-                }).toList(), // Hapus toList() jika error di versi Dart lama, tapi biasanya aman
+                }).toList(),
 
               const SizedBox(height: 80), // Ruang kosong di bawah agar tidak tertutup FAB
             ],
@@ -155,20 +158,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      actions: [
-        IconButton(
-          onPressed: () {
-            // NAVIGASI KE PENGATURAN
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SettingsPage()),
-            );
-          },
-          // Ganti icon lonceng jadi icon gear (setting)
-          icon: Icon(Icons.settings_rounded, color: Colors.grey[800]),
-        ),
-        const SizedBox(width: 10),
-      ],
+      // Ikon pengaturan sudah dihapus di sini
     );
   }
 

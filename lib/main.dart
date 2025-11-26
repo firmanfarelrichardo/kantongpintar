@@ -1,84 +1,71 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:testflutter/pages/account/account_page.dart';
-import 'package:testflutter/pages/category/category_page.dart';
-import 'package:testflutter/pages/graph/graph_page.dart';
-import 'package:testflutter/pages/home/home_page.dart';
-import 'package:testflutter/pages/pockets/pocket_management_page.dart';
+import 'package:device_preview/device_preview.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:provider/provider.dart';
+import 'package:testflutter/pages/main_screen.dart';
+import 'package:testflutter/providers/home_provider.dart';
 
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+// === KONFIGURASI WARNA TEMA ===
+const Color kPrimaryColor = Color(0xFF2A2A72);
+const Color kSecondaryColor = Color(0xFFE1F5FE);
+const Color kBackgroundColor = Color(0xFFF8F9FE);
+const Color kTextColor = Color(0xFF424242);
+const Color kDangerColor = Color(0xFFEF5350);
+const Color kSuccessColor = Color(0xFF66BB6A);
 
-  @override
-  State<MainScreen> createState() => _MainScreenState();
+// === FUNGSI UTAMA (INI YANG HILANG DI TEMPATMU) ===
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('id_ID', null);
+
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+  ));
+
+  runApp(
+    DevicePreview(
+      enabled: !kReleaseMode,
+      builder: (context) => const MyApp(),
+    ),
+  );
 }
 
-class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
-
-  final List<Widget> _pages = [
-    const HomePage(),
-    const GraphPage(),
-    const PocketManagementPage(),
-    const AccountPage(),
-    const CategoryPage(),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
-          ],
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => HomeProvider()),
+      ],
+      child: MaterialApp(
+        useInheritedMediaQuery: true,
+        locale: DevicePreview.locale(context),
+        builder: DevicePreview.appBuilder,
+        debugShowCheckedModeBanner: false,
+        title: 'Kantong Pintar',
+        theme: ThemeData(
+          useMaterial3: true,
+          fontFamily: 'Roboto',
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: kPrimaryColor,
+            brightness: Brightness.light,
+            primary: kPrimaryColor,
+            surface: kBackgroundColor,
+          ),
+          scaffoldBackgroundColor: kBackgroundColor,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: kBackgroundColor,
+            foregroundColor: kTextColor,
+            elevation: 0,
+            centerTitle: true,
+          ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFF2A2A72), // Warna Tema Biru Tua
-          unselectedItemColor: Colors.grey[400],
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontSize: 12),
-          items: const <BottomNavigationBarItem>[
-            BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long_rounded),
-              label: 'Riwayat', // GANTI JADI INDO
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.pie_chart_rounded),
-              label: 'Analisis', // GANTI JADI INDO
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.account_balance_wallet_rounded),
-              label: 'Anggaran', // GANTI JADI INDO
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.credit_card_rounded),
-              label: 'Akun', // GANTI JADI INDO
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.category_rounded),
-              label: 'Kategori', // GANTI JADI INDO
-            ),
-          ],
-        ),
+        home: const MainScreen(), // Ini memanggil file main_screen.dart
       ),
     );
   }
