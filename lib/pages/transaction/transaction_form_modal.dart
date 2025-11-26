@@ -1,23 +1,19 @@
-// lib/pages/transaction/transaction_form_modal.dart
-// (100% Siap Pakai - VERSI BARU dengan Kategori)
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:testflutter/models/account.dart';
-import 'package:testflutter/models/category.dart'; // BARU
+import 'package:testflutter/models/category.dart';
+import 'package:testflutter/models/pocket.dart';
 import 'package:testflutter/services/account_repository.dart';
-import 'package:testflutter/services/category_repository.dart'; // BARU
+import 'package:testflutter/services/category_repository.dart';
+import 'package:testflutter/services/pocket_repository.dart';
 import 'package:testflutter/services/transaction_repository.dart';
 import 'package:testflutter/models/transaction.dart' as model;
 
 class TransactionFormModal extends StatefulWidget {
   final VoidCallback onSaveSuccess;
 
-  const TransactionFormModal({
-    required this.onSaveSuccess,
-    super.key,
-  });
+  const TransactionFormModal({required this.onSaveSuccess, super.key});
 
   @override
   State<TransactionFormModal> createState() => _TransactionFormModalState();
@@ -25,46 +21,50 @@ class TransactionFormModal extends StatefulWidget {
 
 class _TransactionFormModalState extends State<TransactionFormModal> {
   final _formKey = GlobalKey<FormState>();
-  
-  // === 1. Repositories ===
-  final TransactionRepository _transactionRepo = TransactionRepository();
-  final AccountRepository _accountRepo = AccountRepository();
-  final CategoryRepository _categoryRepo = CategoryRepository(); // BARU
 
-  // === 2. Controller & State Form ===
+  // Repositories
+  final _transactionRepo = TransactionRepository();
+  final _accountRepo = AccountRepository();
+  final _categoryRepo = CategoryRepository();
+  final _pocketRepo = PocketRepository();
+
+  // Controllers
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
 
+  // State Variables
   String _selectedType = 'expense';
   DateTime _selectedDate = DateTime.now();
   String? _selectedAccountId;
-  String? _selectedCategoryId; // BARU
+  String? _selectedCategoryId;
+  String? _selectedPocketId;
 
-  // === 3. State untuk UI ===
-  bool _isLoading = true; // Satu state loading gabungan
+  bool _isLoading = true;
   bool _isSaving = false;
-  
-  // Daftar data untuk dropdown
+
   List<Account> _accounts = [];
-  List<Category> _expenseCategories = []; // BARU
-  List<Category> _incomeCategories = []; // BARU
+  List<Category> _expenseCategories = [];
+  List<Category> _incomeCategories = [];
+  List<Pocket> _pockets = [];
+
+  // Warna Tema (Sama dengan Home)
+  final Color _primaryColor = const Color(0xFF2A2A72);
+  final Color _activeToggleColor = const Color(0xFF009FFD);
 
   @override
   void initState() {
     super.initState();
-    // Muat semua data yang diperlukan untuk form
     _loadFormData();
   }
 
-  /// Memuat semua data (Akun & Kategori) secara paralel
   Future<void> _loadFormData() async {
-    setState(() { _isLoading = true; });
+    setState(() => _isLoading = true);
     try {
-      // Ambil semua data sekaligus
       final results = await Future.wait([
         _accountRepo.getAllAccounts(),
         _categoryRepo.getCategoriesByType('expense'),
         _categoryRepo.getCategoriesByType('income'),
+        _pocketRepo.getAllPockets(),
       ]);
 
       if (mounted) {
@@ -72,302 +72,352 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
           _accounts = results[0] as List<Account>;
           _expenseCategories = results[1] as List<Category>;
           _incomeCategories = results[2] as List<Category>;
+          _pockets = results[3] as List<Pocket>;
 
-          // Set default Akun
-          if (_accounts.isNotEmpty) {
-            _selectedAccountId = _accounts.first.id;
-          }
-          // Set default Kategori (berdasarkan tipe default 'expense')
-          if (_expenseCategories.isNotEmpty) {
-            _selectedCategoryId = _expenseCategories.first.id;
-          }
+          if (_accounts.isNotEmpty) _selectedAccountId = _accounts.first.id;
+          if (_expenseCategories.isNotEmpty) _selectedCategoryId = _expenseCategories.first.id;
 
           _isLoading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() { _isLoading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat data form: $e')),
-        );
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  @override
-  void dispose() {
-    _amountController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  /// Fungsi utama untuk menyimpan data ke database
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
-    
-    if (_selectedAccountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Anda harus memilih satu akun.')),
-      );
-      return;
-    }
-    
-    if (_selectedCategoryId == null) {
-       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Anda harus memilih kategori.')),
-      );
-      return;
-    }
+    if (_selectedAccountId == null) return;
 
-    setState(() { _isSaving = true; });
+    setState(() => _isSaving = true);
 
     try {
       final now = DateTime.now();
+      // Gabungkan tanggal yang dipilih dengan jam sekarang agar urutan rapi
+      final finalDate = DateTime(
+          _selectedDate.year, _selectedDate.month, _selectedDate.day,
+          now.hour, now.minute, now.second
+      );
+
       final newTransaction = model.Transaction(
         id: now.millisecondsSinceEpoch.toString(),
         accountId: _selectedAccountId!,
         amount: double.parse(_amountController.text.replaceAll('.', '')),
         type: _selectedType,
         description: _descriptionController.text,
-        transactionDate: _selectedDate,
-        categoryId: _selectedCategoryId, // <-- BARU DISIMPAN
+        transactionDate: finalDate,
+        categoryId: _selectedCategoryId,
+        pocketId: _selectedPocketId,
+        transferGroupId: null,
         createdAt: now,
         updatedAt: now,
-        pocketId: null,
-        transferGroupId: null,
       );
 
       await _transactionRepo.createTransaction(newTransaction);
       widget.onSaveSuccess();
+      if (mounted) Navigator.pop(context);
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Transaksi berhasil dicatat!')),
-        );
-      }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan transaksi: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
-      if (mounted) {
-        setState(() { _isSaving = false; });
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
-  
+
   void _presentDatePicker() async {
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2023),
+      firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: ColorScheme.light(primary: _primaryColor),
+          ),
+          child: child!,
+        );
+      },
     );
     if (pickedDate != null) {
-      setState(() { _selectedDate = pickedDate; });
+      setState(() => _selectedDate = pickedDate);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+    // Agar modal naik saat keyboard muncul
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    // Jika masih loading, tampilkan spinner
-    if (_isLoading) {
-      return const Padding(
-        padding: EdgeInsets.all(40.0),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    return SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.only(
-          top: 30,
-          left: 20,
-          right: 20,
-          bottom: 20 + bottomPadding,
-        ),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              // === Toggle Tipe Transaksi ===
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildTypeToggle('Pengeluaran', 'expense', Colors.red),
-                  _buildTypeToggle('Pemasukan', 'income', Colors.green),
-                ],
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85, // Tinggi modal 85% layar
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      child: Column(
+        children: [
+          // 1. Handle Bar Kecil di Atas
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 20),
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(height: 20),
-              
-              // === Dropdown Akun ===
-              _buildAccountDropdown(),
-              const SizedBox(height: 16),
-
-              // === BARU: Dropdown Kategori ===
-              _buildCategoryDropdown(),
-              const SizedBox(height: 10),
-
-              // === Pilih Tanggal ===
-              GestureDetector(
-                onTap: _presentDatePicker,
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Waktu',
-                    suffixIcon: Icon(Icons.calendar_today),
-                  ),
-                  child: Text(DateFormat('d MMM yyyy').format(_selectedDate)),
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // === Input Jumlah (Amount) ===
-              TextFormField(
-                controller: _amountController,
-                decoration: const InputDecoration(labelText: 'Jumlah (Rp)'),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) {
-                  if (value == null || value.isEmpty || double.tryParse(value) == null) {
-                    return 'Masukkan jumlah yang valid.';
-                  }
-                  if (double.parse(value) <= 0) {
-                    return 'Jumlah harus lebih dari 0.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-
-              // === Input Deskripsi ===
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Deskripsi'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Deskripsi wajib diisi.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 30),
-
-              // === Tombol Simpan ===
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                ),
-                onPressed: _isSaving ? null : _submitForm,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(color: Colors.white),
-                      )
-                    : const Text(
-                        'SIMPAN',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                      ),
-              ),
-            ],
+            ),
           ),
+
+          // 2. Judul Modal
+          Text(
+            "Tambah Transaksi",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 3. Isi Form (Scrollable)
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(24, 0, 24, 24 + bottomInset),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // TOGGLE TIPE (Expense / Income)
+                    _buildModernToggle(),
+                    const SizedBox(height: 25),
+
+                    // INPUT JUMLAH (Hero Input)
+                    const Text("Total Nominal", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _amountController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: _selectedType == 'expense' ? Colors.redAccent : Colors.green
+                      ),
+                      decoration: InputDecoration(
+                        prefixText: "Rp ",
+                        prefixStyle: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[400]
+                        ),
+                        border: InputBorder.none,
+                        hintText: "0",
+                        hintStyle: TextStyle(color: Colors.grey[300]),
+                      ),
+                      validator: (v) => (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                    ),
+                    const Divider(thickness: 1),
+                    const SizedBox(height: 20),
+
+                    // DROPDOWN AKUN
+                    _buildLabel("Sumber Dana / Akun"),
+                    _buildDropdown(
+                      value: _selectedAccountId,
+                      hint: "Pilih Akun",
+                      items: _accounts.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
+                      onChanged: (v) => setState(() => _selectedAccountId = v as String?),
+                      icon: Icons.account_balance_wallet_rounded,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // DROPDOWN KATEGORI
+                    _buildLabel("Kategori"),
+                    _buildDropdown(
+                      value: _selectedCategoryId,
+                      hint: "Pilih Kategori",
+                      items: (_selectedType == 'expense' ? _expenseCategories : _incomeCategories)
+                          .map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
+                      onChanged: (v) => setState(() => _selectedCategoryId = v as String?),
+                      icon: Icons.category_rounded,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // DATE PICKER
+                    _buildLabel("Tanggal"),
+                    GestureDetector(
+                      onTap: _presentDatePicker,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_today_rounded, color: _primaryColor, size: 20),
+                            const SizedBox(width: 12),
+                            Text(
+                              DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(_selectedDate),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // DESKRIPSI (Opsional)
+                    _buildLabel("Catatan (Opsional)"),
+                    TextFormField(
+                      controller: _descriptionController,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        hintText: "Contoh: Makan siang...",
+                        hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        prefixIcon: Icon(Icons.notes_rounded, color: Colors.grey[400]),
+                      ),
+                    ),
+
+                    const SizedBox(height: 30),
+
+                    // TOMBOL SIMPAN
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _submitForm,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primaryColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text(
+                          "SIMPAN TRANSAKSI",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGETS HELPER ---
+
+  Widget _buildLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
+      child: Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey[700])),
+    );
+  }
+
+  Widget _buildDropdown({
+    required String? value,
+    required String hint,
+    required List<DropdownMenuItem<Object>>? items,
+    required Function(Object?) onChanged,
+    required IconData icon,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButtonFormField(
+          decoration: InputDecoration(
+            icon: Icon(icon, color: _primaryColor, size: 22),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12), // Padding vertikal pas
+          ),
+          value: value,
+          hint: Text(hint, style: TextStyle(fontSize: 14, color: Colors.grey[400])),
+          isExpanded: true,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          items: items,
+          onChanged: onChanged,
+          validator: (v) => v == null ? "Wajib dipilih" : null,
         ),
       ),
     );
   }
 
-  // Helper widget untuk dropdown akun
-  Widget _buildAccountDropdown() {
-    if (_accounts.isEmpty) {
-      return const InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Akun',
-          errorText: 'Buat akun di halaman Akun terlebih dahulu!',
-        ),
-      );
-    }
-    
-    return DropdownButtonFormField<String>(
-      decoration: const InputDecoration(labelText: 'Pilih Akun'),
-      value: _selectedAccountId,
-      items: _accounts.map((account) {
-        return DropdownMenuItem(
-          value: account.id,
-          child: Text('${account.bankName} - ${account.name}'),
-        );
-      }).toList(),
-      onChanged: (newValue) => setState(() => _selectedAccountId = newValue),
-      validator: (value) => value == null ? 'Pilih akun.' : null,
+  Widget _buildModernToggle() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          _buildToggleItem("Pengeluaran", 'expense'),
+          _buildToggleItem("Pemasukan", 'income'),
+        ],
+      ),
     );
   }
 
-  // === BARU: Helper widget untuk dropdown kategori ===
-  Widget _buildCategoryDropdown() {
-    // Tentukan list mana yang akan dipakai
-    final currentList = _selectedType == 'expense' ? _expenseCategories : _incomeCategories;
-
-    if (currentList.isEmpty) {
-      return InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Kategori',
-          errorText: 'Buat kategori $_selectedType di halaman Akun!',
-        ),
-      );
-    }
-    
-    return DropdownButtonFormField<String>(
-      decoration: const InputDecoration(labelText: 'Pilih Kategori'),
-      value: _selectedCategoryId,
-      items: currentList.map((category) {
-        return DropdownMenuItem(
-          value: category.id,
-          child: Text('${category.iconEmoji ?? ''} ${category.name}'),
-        );
-      }).toList(),
-      onChanged: (newValue) => setState(() => _selectedCategoryId = newValue),
-      validator: (value) => value == null ? 'Pilih kategori.' : null,
-    );
-  }
-
-  // Helper widget untuk toggle tipe
-  Widget _buildTypeToggle(String label, String type, Color color) {
-    final bool isSelected = _selectedType == type;
+  Widget _buildToggleItem(String label, String type) {
+    final isSelected = _selectedType == type;
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
         onTap: () {
           setState(() {
             _selectedType = type;
-            // PENTING: Reset pilihan kategori saat tipe berubah
-            if (_selectedType == 'expense' && _expenseCategories.isNotEmpty) {
-              _selectedCategoryId = _expenseCategories.first.id;
-            } else if (_selectedType == 'income' && _incomeCategories.isNotEmpty) {
-              _selectedCategoryId = _incomeCategories.first.id;
+            // Reset kategori jika pindah tipe
+            if (type == 'expense') {
+              _selectedCategoryId = _expenseCategories.isNotEmpty ? _expenseCategories.first.id : null;
             } else {
-              _selectedCategoryId = null; // Kosongkan jika tidak ada kategori
+              _selectedCategoryId = _incomeCategories.isNotEmpty ? _incomeCategories.first.id : null;
             }
           });
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? color.withOpacity(0.9) : Colors.grey[200],
-            border: Border.all(color: isSelected ? color : Colors.grey[400]!),
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: isSelected
+                ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
+                : [],
           ),
           alignment: Alignment.center,
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black,
               fontWeight: FontWeight.bold,
+              color: isSelected
+                  ? (type == 'expense' ? Colors.redAccent : Colors.green)
+                  : Colors.grey[500],
             ),
           ),
         ),

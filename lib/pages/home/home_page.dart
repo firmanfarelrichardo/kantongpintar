@@ -1,14 +1,9 @@
-// lib/pages/home/home_page.dart
-// (REDESIGN A: Tampilan Records ala MyMoney - Header Ringkasan & Navigasi Tanggal)
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:testflutter/main.dart'; // Mengambil warna tema baru
-import 'package:testflutter/models/account.dart';
-import 'package:testflutter/models/transaction.dart';
-import 'package:testflutter/services/account_repository.dart';
-import 'package:testflutter/services/transaction_repository.dart';
-import 'package:testflutter/pages/transaction/transaction_form_modal.dart';
+import 'package:provider/provider.dart';
+import '../../providers/home_provider.dart';
+import '../../utils/currency_format.dart';
+import '../transaction/transaction_form_modal.dart'; // Import form transaksi
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,267 +13,348 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // === State Variables ===
-  bool _isLoading = true;
-  DateTime _selectedDate = DateTime.now(); // Menyimpan tanggal yang sedang dipilih
-
-  // Data List
-  List<Transaction> _allTransactions = [];
-  List<Transaction> _filteredTransactions = []; // Transaksi khusus hari ini
-  Map<String, Account> _accountMap = {}; // Peta nama akun
-
-  // Ringkasan Header
-  double _incomeToday = 0.0;
-  double _expenseToday = 0.0;
-  double _balanceTotal = 0.0;
-
-  // Repositories
-  final _accountRepo = AccountRepository();
-  final _transactionRepo = TransactionRepository();
+  // === KONFIGURASI WARNA TEMA ===
+  final Color _primaryColor = const Color(0xFF2A2A72); // Biru Tua Premium
+  final Color _accentColor = const Color(0xFF009FFD); // Biru Terang
+  final Color _backgroundColor = const Color(0xFFF8F9FE); // Abu-abu Terang
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // Memuat data saat halaman pertama kali dibuka
+    Future.microtask(() => context.read<HomeProvider>().loadHomeData());
   }
 
-  /// Memuat semua data dari database sekaligus
-  Future<void> _loadData() async {
-    setState(() { _isLoading = true; });
-    try {
-      final results = await Future.wait([
-        _accountRepo.getAllAccounts(),
-        _transactionRepo.getAllTransactions(),
-      ]);
-
-      final accounts = results[0] as List<Account>;
-      final transactions = results[1] as List<Transaction>;
-
-      // Hitung Total Aset Global (Saldo semua akun)
-      double totalAsset = accounts.fold(0.0, (sum, acc) => sum + acc.initialBalance);
-
-      // Update total asset berdasarkan seluruh income - expense bersejarah
-      // (Asumsi: initialBalance adalah saldo awal, transaksi menambah/mengurangi)
-      for (var t in transactions) {
-        if (t.type == 'income') totalAsset += t.amount;
-        if (t.type == 'expense') totalAsset -= t.amount;
-      }
-
-      // Buat Map agar kita bisa menampilkan nama akun di list transaksi dengan cepat
-      final accMap = { for (var a in accounts) a.id : a };
-
-      if (mounted) {
-        setState(() {
-          _accountMap = accMap;
-          _allTransactions = transactions;
-          _balanceTotal = totalAsset;
-          _isLoading = false;
-        });
-        // Setelah data siap, langsung filter untuk tampilan hari ini
-        _filterDataByDate();
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      print("Error loading data: $e");
-    }
-  }
-
-  /// Logika Inti: Memfilter transaksi hanya untuk tanggal _selectedDate
-  void _filterDataByDate() {
-    // Tentukan awal hari (00:00:00) dan akhir hari (23:59:59)
-    final startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    final endOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 23, 59, 59);
-
-    // Ambil transaksi yang berada dalam rentang waktu tersebut
-    final dailyTrx = _allTransactions.where((t) {
-      return t.transactionDate.isAfter(startOfDay.subtract(const Duration(seconds: 1))) &&
-          t.transactionDate.isBefore(endOfDay.add(const Duration(seconds: 1)));
-    }).toList();
-
-    // Hitung total Income & Expense HARI INI saja
-    double inc = 0.0;
-    double exp = 0.0;
-
-    for (var t in dailyTrx) {
-      if (t.type == 'income') inc += t.amount;
-      if (t.type == 'expense') exp += t.amount;
-    }
-
-    setState(() {
-      _filteredTransactions = dailyTrx;
-      _incomeToday = inc;
-      _expenseToday = exp;
-      // _balanceTotal tidak berubah karena itu adalah saldo global, bukan saldo harian
-    });
-  }
-
-  /// Mengubah tanggal (maju/mundur)
-  void _changeDate(int days) {
-    setState(() {
-      _selectedDate = _selectedDate.add(Duration(days: days));
-    });
-    _filterDataByDate(); // Refresh data list setelah tanggal berubah
-  }
-
-  void _showAddTransactionModal() {
+  // === FUNGSI MEMUNCULKAN MODAL TAMBAH TRANSAKSI ===
+  void _showAddTransactionModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => TransactionFormModal(onSaveSuccess: _loadData),
+      backgroundColor: Colors.transparent, // Agar rounded corners terlihat
+      builder: (ctx) {
+        return TransactionFormModal(
+          onSaveSuccess: () {
+            // Refresh data home setelah simpan
+            context.read<HomeProvider>().loadHomeData();
+          },
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('EEE, d MMM yyyy', 'id_ID'); // Format tanggal Indonesia
-    final currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
-
     return Scaffold(
-      // Tidak perlu AppBar standar, kita buat custom header
-      body: Column(
-        children: [
-          // === BAGIAN 1: HEADER NAVIGASI & STATISTIK ===
-          Container(
-            color: kBackgroundColor,
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Column(
-              children: [
-                // A. Navigasi Tanggal (< Tanggal >)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 50, 8, 10), // Top 50 agar aman di bawah status bar
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left, size: 30, color: kTextColor),
-                        onPressed: () => _changeDate(-1),
-                      ),
-                      Text(
-                        dateFormat.format(_selectedDate),
-                        style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: kTextColor
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right, size: 30, color: kTextColor),
-                        onPressed: () => _changeDate(1),
-                      ),
-                    ],
-                  ),
-                ),
+      backgroundColor: _backgroundColor,
+      appBar: _buildCustomAppBar(),
 
-                // B. Statistik 3 Kolom (Expense | Income | Balance)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildStatItem('EXPENSE', _expenseToday, kDangerColor), // Merah
-                      _buildStatItem('INCOME', _incomeToday, kSuccessColor),  // Hijau
-                      _buildStatItem('TOTAL BALANCE', _balanceTotal, kTextColor), // Abu/Hitam
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, thickness: 1), // Garis pemisah header
-
-          // === BAGIAN 2: LIST TRANSAKSI ===
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredTransactions.isEmpty
-                ? _buildEmptyState()
-                : ListView.separated(
-              padding: EdgeInsets.zero,
-              itemCount: _filteredTransactions.length,
-              separatorBuilder: (ctx, i) => const Divider(height: 1, indent: 70),
-              itemBuilder: (context, index) {
-                final trx = _filteredTransactions[index];
-                return _buildTransactionItem(trx, currencyFormat);
-              },
-            ),
-          ),
-        ],
-      ),
-
-      // Tombol Tambah (+) Biru
+      // === TOMBOL TAMBAH (+) MENGAMBANG ===
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddTransactionModal,
-        backgroundColor: kPrimaryColor,
+        onPressed: () => _showAddTransactionModal(context),
+        backgroundColor: _accentColor,
+        elevation: 4,
         shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white, size: 32),
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
+      ),
+      // ====================================
+
+      body: Consumer<HomeProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            children: [
+              // 1. KARTU SALDO UTAMA
+              _buildMainBalanceCard(provider),
+
+              const SizedBox(height: 25),
+
+              // 2. HEADER "TRANSAKSI TERAKHIR"
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Transaksi Terakhir",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      // Navigasi ke halaman semua transaksi (Tab Records/Home)
+                      // Karena ini di dalam MainScreen, user bisa klik tab bawah
+                    },
+                    child: const Text("Lihat Semua"),
+                  )
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              // 3. LIST TRANSAKSI
+              if (provider.recentTransactions.isEmpty)
+                _buildEmptyState()
+              else
+                ...provider.recentTransactions.map((tx) {
+                  return _buildTransactionItem(tx);
+                }).toList(), // Hapus toList() jika error di versi Dart lama, tapi biasanya aman
+
+              const SizedBox(height: 80), // Ruang kosong di bawah agar tidak tertutup FAB
+            ],
+          );
+        },
       ),
     );
   }
 
-  // Widget kecil untuk satu item statistik (Judul kecil, Angka besar)
-  Widget _buildStatItem(String label, double amount, Color color) {
-    final format = NumberFormat.compactCurrency(locale: 'id_ID', symbol: '', decimalDigits: 0);
-    return Column(
+  // --- WIDGET BUILDER HELPERS ---
+
+  PreferredSizeWidget _buildCustomAppBar() {
+    return AppBar(
+      backgroundColor: _backgroundColor,
+      elevation: 0,
+      titleSpacing: 20,
+      automaticallyImplyLeading: false,
+      title: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.person, color: Colors.grey),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Halo, Pengguna!",
+                style: TextStyle(
+                  color: Colors.grey[800],
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                "Selamat datang kembali",
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          onPressed: () {},
+          icon: Icon(Icons.notifications_none_rounded, color: Colors.grey[800]),
+        ),
+        const SizedBox(width: 10),
+      ],
+    );
+  }
+
+  Widget _buildMainBalanceCard(HomeProvider provider) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_primaryColor, _accentColor],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _primaryColor.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                "Total Saldo",
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+              Icon(Icons.account_balance_wallet_outlined, color: Colors.white70)
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            CurrencyFormat.toIDR(provider.totalBalance),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              _buildSummaryItem(
+                icon: Icons.arrow_downward_rounded,
+                color: Colors.greenAccent,
+                label: "Pemasukan",
+                amount: CurrencyFormat.toIDR(provider.totalIncome),
+              ),
+              const SizedBox(width: 24),
+              _buildSummaryItem(
+                icon: Icons.arrow_upward_rounded,
+                color: Colors.orangeAccent,
+                label: "Pengeluaran",
+                amount: CurrencyFormat.toIDR(provider.totalExpense),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String amount,
+  }) {
+    return Row(
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-        const SizedBox(height: 4),
-        Text(
-          format.format(amount),
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            Text(
+              amount,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  // Tampilan jika tidak ada transaksi hari itu (Icon dokumen kosong)
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildTransactionItem(dynamic tx) {
+    final isExpense = tx.type == 'expense';
+    final iconBgColor = isExpense ? Colors.red[50] : Colors.green[50];
+    final iconColor = isExpense ? Colors.red : Colors.green;
+    final iconData = isExpense ? Icons.shopping_bag_outlined : Icons.monetization_on_outlined;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.05),
+            spreadRadius: 1,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
-          Icon(Icons.receipt_long_outlined, size: 60, color: Colors.grey[300]),
-          const SizedBox(height: 16),
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: iconBgColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(iconData, color: iconColor),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tx.categoryName,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  DateFormat('dd MMM yyyy').format(DateTime.parse(tx.date)),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                ),
+                if (tx.description.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    tx.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[400],
+                        fontStyle: FontStyle.italic),
+                  ),
+                ]
+              ],
+            ),
+          ),
           Text(
-            'Belum ada catatan hari ini.',
-            style: TextStyle(color: Colors.grey[400]),
+            '${isExpense ? "- " : "+ "}${CurrencyFormat.toIDR(tx.amount)}',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isExpense ? Colors.redAccent : Colors.green,
+            ),
           ),
         ],
       ),
     );
   }
 
-  // Item list transaksi (Icon di kiri, Text di tengah, Harga di kanan)
-  Widget _buildTransactionItem(Transaction trx, NumberFormat format) {
-    final isExpense = trx.type == 'expense';
-    final color = isExpense ? kDangerColor : kSuccessColor;
-    final sign = isExpense ? '-' : '+';
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-      leading: CircleAvatar(
-        radius: 18,
-        backgroundColor: color.withOpacity(0.1), // Warna background pudar
-        child: Icon(
-            isExpense ? Icons.shopping_cart : Icons.savings, // Ikon sementara
-            color: color,
-            size: 18
-        ),
-      ),
-      title: Text(
-        trx.description?.isNotEmpty == true ? trx.description! : 'Tanpa Keterangan',
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: kTextColor),
-      ),
-      subtitle: Text(
-        _accountMap[trx.accountId]?.name ?? 'Akun Terhapus',
-        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-      ),
-      trailing: Text(
-        '$sign ${format.format(trx.amount)}',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: color,
-          fontSize: 14,
-        ),
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(30),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Icon(Icons.receipt_long_rounded, size: 60, color: Colors.grey[300]),
+          const SizedBox(height: 10),
+          Text(
+            "Belum ada transaksi hari ini",
+            style: TextStyle(color: Colors.grey[500]),
+          ),
+        ],
       ),
     );
   }
