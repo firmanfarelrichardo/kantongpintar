@@ -75,8 +75,9 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
           _pockets = results[3] as List<Pocket>;
 
           if (_accounts.isNotEmpty) _selectedAccountId = _accounts.first.id;
-          // Default kategori expense pertama
-          if (_expenseCategories.isNotEmpty) _selectedCategoryId = _expenseCategories.first.id;
+          // PERBAIKAN: Tidak set default kategori, biarkan user memilih
+          // Kategori bisa null untuk transaksi tanpa anggaran
+          _selectedCategoryId = null;
 
           _isLoading = false;
         });
@@ -249,6 +250,7 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                         ],
                         onChanged: (v) => _onPocketChanged(v as String?), // Panggil fungsi logika kunci
                         icon: Icons.savings_rounded,
+                        isRequired: false, // PERBAIKAN: Anggaran tidak wajib dipilih
                       ),
                       const SizedBox(height: 16),
                     ],
@@ -262,9 +264,15 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
                         hint: "Pilih Kategori",
                         // Jika dikunci, disable onChanged
                         onChanged: _isCategoryLocked ? null : (v) => setState(() => _selectedCategoryId = v as String?),
-                        items: (_selectedType == 'expense' ? _expenseCategories : _incomeCategories)
-                            .map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
+                        items: [
+                          // Tambah opsi "Tanpa Kategori" untuk pengeluaran tanpa anggaran
+                          if (_selectedType == 'expense' && !_isCategoryLocked)
+                            const DropdownMenuItem(value: null, child: Text("Tanpa Kategori")),
+                          ...(_selectedType == 'expense' ? _expenseCategories : _incomeCategories)
+                              .map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
+                        ],
                         icon: _isCategoryLocked ? Icons.lock_rounded : Icons.category_rounded, // Ganti icon gembok jika dikunci
+                        isRequired: _isCategoryLocked, // Hanya wajib jika dikunci (ada anggaran)
                       ),
                     ),
                     // Pesan kecil jika terkunci
@@ -358,6 +366,7 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
     required List<DropdownMenuItem<Object>>? items,
     required Function(Object?)? onChanged, // Bisa null jika disabled
     required IconData icon,
+    bool isRequired = true, // Parameter baru untuk validasi opsional
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -379,7 +388,7 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
           icon: const Icon(Icons.keyboard_arrow_down_rounded),
           items: items,
           onChanged: onChanged,
-          validator: (v) => v == null ? "Wajib dipilih" : null,
+          validator: (v) => isRequired && v == null ? "Wajib dipilih" : null,
         ),
       ),
     );
@@ -410,12 +419,7 @@ class _TransactionFormModalState extends State<TransactionFormModal> {
             _selectedType = type;
             _selectedPocketId = null; // Reset pocket jika ganti tipe
             _isCategoryLocked = false; // Buka kunci kategori
-
-            if (type == 'expense') {
-              _selectedCategoryId = _expenseCategories.isNotEmpty ? _expenseCategories.first.id : null;
-            } else {
-              _selectedCategoryId = _incomeCategories.isNotEmpty ? _incomeCategories.first.id : null;
-            }
+            _selectedCategoryId = null; // Reset kategori, biarkan user pilih
           });
         },
         child: AnimatedContainer(
