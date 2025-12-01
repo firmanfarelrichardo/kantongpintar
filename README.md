@@ -342,14 +342,6 @@ This project is **private** and not licensed for public use or distribution.
 
 ---
 
-## 👨‍💻 Author
-
-**Firman Farel Richardo**
-
-- GitHub: [@firmanfarelrichardo](https://github.com/firmanfarelrichardo)
-
----
-
 ## 🙏 Acknowledgments
 
 - Flutter Team for the amazing framework
