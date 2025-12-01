@@ -16,7 +16,6 @@
 
 - [About](#-about)
 - [Features](#-features)
-- [Screenshots](#-screenshots)
 - [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
@@ -75,12 +74,6 @@ Aplikasi ini dibangun dengan prinsip **Clean Architecture** dan **Repository Pat
 - Analisis spending per kategori
 - Trend keuangan bulanan
 - Export laporan (Coming Soon)
-
----
-
-## 📱 Screenshots
-
-> _Screenshots will be added soon_
 
 ---
 
