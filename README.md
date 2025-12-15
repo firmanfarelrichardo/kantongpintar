@@ -16,6 +16,7 @@
 
 - [About](#-about)
 - [Features](#-features)
+- [Screenshots](#-screenshots)
 - [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
@@ -74,6 +75,12 @@ Aplikasi ini dibangun dengan prinsip **Clean Architecture** dan **Repository Pat
 - Analisis spending per kategori
 - Trend keuangan bulanan
 - Export laporan (Coming Soon)
+
+---
+
+## 📱 Screenshots
+
+> _Screenshots will be added soon_
 
 ---
 
@@ -332,6 +339,14 @@ Contributions are welcome! Please follow these guidelines:
 This project is **private** and not licensed for public use or distribution.
 
 **Copyright © 2025 Firman Farel Richardo**
+
+---
+
+## 👨‍💻 Author
+
+**Firman Farel Richardo**
+
+- GitHub: [@firmanfarelrichardo](https://github.com/firmanfarelrichardo)
 
 ---
 
